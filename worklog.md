@@ -221,3 +221,25 @@ Stage Summary:
 - Components: LeaveModule (default export, ready for PortalShell wiring via feature:leave) + 8 subcomponents, mobile-first, emerald palette (no indigo/blue), dark-mode via semantic tokens, framer-motion stagger/fade, skeletons + EmptyState + retry, sonner toasts, TanStack Query with shared leaveKeys.all invalidation
 - i18n: bn-portal-leave.ts / en-portal-leave.ts filled and registered (no shared file edits)
 - Risks: requests GET does JS-side sort/paginate after Prisma filter (pending-first not expressible in Prisma orderBy) — fine at sandbox scale; client working-day preview hardcodes Fri/Sat (org weekendConfig not exposed in session store — server is the source of truth); balances include status="active" employees only; dev server was found dead mid-task and restarted detached (bun run dev, port 3000)
+
+---
+Task ID: 4-integration
+Agent: CTO (main agent)
+Task: Phase 2 integration — wire modules into PortalShell, dashboard upgrade, styling polish, E2E QA, GitHub push
+
+Work Log:
+- Wired PortalShell: feature:attendance→AttendanceModule, feature:leave→LeaveModule, feature:payroll→PayrollModule (default exports), new "settings" core nav → OrgSettingsModule; PortalSection type + shell i18n keys added
+- Fixed payroll default-export import error (500 → 200)
+- Payroll UX: auto-jump to latest period with data when current month is empty (React render-phase adjust pattern; lint-clean)
+- Overview API: + salaryByDept (groupBy monthlySalary per dept), + pendingLeaveRequests count
+- Dashboard upgrade: pending-leave alert banner (click→leave module, warning color + count badge), salary-by-department BarChart (৳ thousands, chart-2 teal), feature-aware quick actions (হাজিরা দেখুন / ছুটির আবেদন যাচাই + pending badge), restructured grids
+- Styling polish (globals.css): pf-card-hover (border+glow), pf-dot + pulse live animation, pf-shimmer skeleton sweep, pf-money/pf-time tabular figures, pf-payslip-print @media print, pf-hairline gradient separator — applied to device cards, request cards, payslip dialog
+- E2E QA (agent-browser): attendance (stats ৯/৭/১/১, device cards, month register matrix ০১-৩০, sync 200 + 1.2s, punch dialog), leave (7 pending, approve flow → 6, note dialog), payroll (auto-period ৳৪৮৫,০০০/৳৪৫৫,৯০০/৳৫৮,২০০/১৮, payslip document dialog with org address), settings (profile/workweek/PF cards), dashboard new widgets, mobile 375px (no h-overflow, hamburger Sheet, inner pf-scrollbar), dark mode OK, admin panel regression OK, dev.log 0 errors
+- DB re-seeded to pristine state after QA mutations
+- Lint: 0 errors (1 known TanStack table warning)
+- GITHUB PUSH SUCCESSFUL: https://github.com/sharif418/peopleflow — main branch live with all 4 commits (repo was created by user; PAT access confirmed)
+
+Stage Summary:
+- Phase 2 COMPLETE: Attendance (ZKTeco-style), Leave, Payroll (BD rules), Org Settings — all browser-verified
+- 69 files changed, +10,766 lines this phase; total platform now: 4 real modules + HR core + super admin panel
+- Remaining Phase 3 candidates: recruitment, performance, expense modules; ERPNext live sync; per-tenant site provisioning for real
