@@ -1,0 +1,178 @@
+// PeopleFlow v2 — Control-plane schema
+// Phase 1: acts as tenant registry + simulates ERPNext data (sync target in production).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users & Auth ────────────────────────────────────────────────────────────
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String
+  name           String
+  role           String       @default("ORG_ADMIN") // SUPER_ADMIN | ORG_ADMIN
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// ─── Organizations (tenants → each maps to an ERPNext site in production) ────
+
+model Organization {
+  id                 String    @id @default(cuid())
+  name               String
+  subdomain          String    @unique // e.g. "akash" → akash.peopleflow.com
+  siteName           String? // ERPNext site name in production
+  status             String    @default("provisioning") // provisioning | active | suspended
+  provisionStartedAt DateTime?
+  planKey            String    @default("starter") // starter | growth | enterprise
+  setupCompleted     Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  users         User[]
+  featureFlags  FeatureFlag[]
+  employees     Employee[]
+  departments   Department[]
+  designations  Designation[]
+  branches      Branch[]
+  shifts        Shift[]
+  attendanceDays AttendanceDay[]
+  invoices      Invoice[]
+  auditLogs     AuditLog[]
+}
+
+model FeatureFlag {
+  id             String       @id @default(cuid())
+  organizationId String
+  featureKey     String
+  enabled        Boolean      @default(false)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, featureKey])
+}
+
+// ─── HR Core (mirrors ERPNext HRMS doctypes) ────────────────────────────────
+
+model Department {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees      Employee[]
+
+  @@unique([organizationId, name])
+}
+
+model Designation {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees      Employee[]
+
+  @@unique([organizationId, name])
+}
+
+model Branch {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  address        String?
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees      Employee[]
+
+  @@unique([organizationId, name])
+}
+
+model Shift {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  startTime      String   @default("09:00")
+  endTime        String   @default("18:00")
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employees      Employee[]
+
+  @@unique([organizationId, name])
+}
+
+model Employee {
+  id             String   @id @default(cuid())
+  organizationId String
+  employeeCode   String
+  firstName      String
+  lastName       String
+  email          String?
+  phone          String?
+  gender         String? // male | female | other
+  dateOfBirth    String?
+  dateOfJoining  String   @default("")
+  employmentType String   @default("full_time") // full_time | part_time | contract | intern
+  status         String   @default("active") // active | probation | suspended | inactive
+  monthlySalary  Int?
+  departmentId   String?
+  designationId  String?
+  branchId       String?
+  shiftId        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  designation  Designation? @relation(fields: [designationId], references: [id], onDelete: SetNull)
+  branch       Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  shift        Shift?      @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, employeeCode])
+}
+
+// Daily aggregated attendance (dashboard charts)
+model AttendanceDay {
+  id             String   @id @default(cuid())
+  organizationId String
+  date           String // YYYY-MM-DD
+  present        Int      @default(0)
+  absent         Int      @default(0)
+  late           Int      @default(0)
+  onLeave        Int      @default(0)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, date])
+}
+
+// ─── Billing & Ops ──────────────────────────────────────────────────────────
+
+model Invoice {
+  id             String   @id @default(cuid())
+  organizationId String
+  amount         Int // BDT
+  status         String   @default("paid") // paid | pending | failed
+  period         String // YYYY-MM
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String?
+  actor          String // email of actor
+  action         String // org.created, org.suspended, feature.enabled, employee.created ...
+  targetType     String?
+  targetId       String?
+  details        String?
+  createdAt      DateTime @default(now())
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+}

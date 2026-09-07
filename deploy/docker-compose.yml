@@ -1,0 +1,157 @@
+# PeopleFlow — ERPNext backend engine (frappe_docker based, PostgreSQL)
+# Deploy on Coolify (Contabo VPS) — see docs/ERPNEXT-SETUP.md for the full guide.
+#
+# Layout:
+#   postgres    → database cluster (one DB per ERPNext site/tenant)
+#   redis-cache / redis-queue / redis-socketio → Frappe workers infra
+#   backend     → Frappe/ERPNext app server (gunicorn)
+#   frontend    → static assets (frappe nginx image)
+#   webserver   → traefik edge router (TLS via Coolify or certbot labels)
+#   create-site → one-shot job: creates the first site (see provision-site.sh for more)
+#
+# Reference: https://github.com/frappe/frappe_docker
+
+version: "3.9"
+
+x-backend-config:
+  &backend
+  image: frappe/erpnext:v15
+  volumes:
+    - sites:/home/frappe/frappe-bench/sites
+  depends_on:
+    configurator:
+      condition: service_completed_successfully
+
+x-customizable-image:
+  &customizable_image
+  image: frappe/erpnext:v15
+
+services:
+  configurator:
+    <<: *backend
+    entrypoint:
+      - bash
+      - -c
+      - >
+        sed -i -e "s/db_host = .*/db_host = postgres/" -e "s/redis_cache = .*/redis_cache = redis-cache:6379\/0/" -e "s/redis_queue = .*/redis_queue = redis-queue:6379\/0/" -e "s/redis_socketio = .*/redis_socketio = redis-socketio:6379\/0/" -e "s/socketio_port = .*/socketio_port = 9000/" sites/common_site_config.json;
+    restart: "no"
+
+  create-site:
+    <<: *backend
+    entrypoint:
+      - bash
+      - -c
+      - >
+        [ -d sites/peopleflow.ailearnersbd.com ] && exit 0;
+        bench new-site peopleflow.ailearnersbd.com
+        --db-type postgres
+        --admin-password=$$ADMIN_PASSWORD
+        --install-app erpnext
+        --install-app hrms
+        --set-default-language bn;
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+    restart: "no"
+
+  backend:
+    <<: *backend
+    restart: always
+    command: gunicorn --bind 0.0.0.0:8000 --threads 4 --workers 4 --worker-class gthread --worker-tmp-dir /dev/shm --timeout 120 frappe.app:application --preload
+
+  websocket:
+    <<: *backend
+    restart: always
+    command: node /home/frappe/frappe-bench/apps/frappe/socketio.js
+    depends_on:
+      - backend
+
+  scheduler:
+    <<: *backend
+    restart: always
+    command: bench schedule
+
+  queue-short:
+    <<: *backend
+    restart: always
+    command: bench worker --queue short,default,short
+
+  queue-long:
+    <<: *backend
+    restart: always
+    command: bench worker --queue long,default,short
+
+  frontend:
+    <<: *backend
+    image: frappe/frappe-nginx:v15
+    restart: always
+    depends_on:
+      - backend
+      - websocket
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis-cache:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server
+    volumes:
+      - redis-cache-data:/data
+
+  redis-queue:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server
+    volumes:
+      - redis-queue-data:/data
+
+  redis-socketio:
+    image: redis:7-alpine
+    restart: always
+    command: redis-server
+    volumes:
+      - redis-socketio-data:/data
+
+  webserver:
+    image: traefik:v3.1
+    restart: always
+    command:
+      - --providers.docker
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certs:/certificates
+    labels:
+      - traefik.enable=true
+      # Coolify proxies this stack; keep internal routing for site traffic
+      - traefik.http.routers.frappe.rule=HostRegexp(`{any:.+}`)
+      - traefik.http.routers.frappe.entrypoints=websecure
+      - traefik.http.services.frappe.loadbalancer.server.port=8080
+
+volumes:
+  sites:
+  pg-data:
+  redis-cache-data:
+  redis-queue-data:
+  redis-socketio-data:
+  traefik-certs:
