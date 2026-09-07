@@ -35,6 +35,12 @@ model Organization {
   provisionStartedAt DateTime?
   planKey            String    @default("starter") // starter | growth | enterprise
   setupCompleted     Boolean   @default(false)
+  address            String? // org office address (settings page)
+  contactPhone       String?
+  contactEmail       String?
+  weekendConfig      String? // comma list e.g. "friday,saturday"
+  pfEnabled          Boolean   @default(true) // provident fund deduction on payroll
+  pfPercent          Int       @default(12) // % of basic
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -46,6 +52,12 @@ model Organization {
   branches      Branch[]
   shifts        Shift[]
   attendanceDays AttendanceDay[]
+  devices       Device[]
+  attendanceLogs AttendanceLog[]
+  leaveTypes    LeaveType[]
+  leaveRequests LeaveRequest[]
+  salaryStructures SalaryStructure[]
+  payslips      Payslip[]
   invoices      Invoice[]
   auditLogs     AuditLog[]
 }
@@ -136,10 +148,14 @@ model Employee {
   branch       Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
   shift        Shift?      @relation(fields: [shiftId], references: [id], onDelete: SetNull)
 
+  attendanceLogs AttendanceLog[]
+  leaveRequests  LeaveRequest[]
+  payslips       Payslip[]
+
   @@unique([organizationId, employeeCode])
 }
 
-// Daily aggregated attendance (dashboard charts)
+// Daily aggregated attendance (dashboard charts) — kept in sync from AttendanceLog
 model AttendanceDay {
   id             String   @id @default(cuid())
   organizationId String
@@ -151,6 +167,146 @@ model AttendanceDay {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, date])
+}
+
+// ─── Attendance devices (ZKTeco-style biometric terminals) ──────────────────
+
+model Device {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String // e.g. "মেইন গেট — K40"
+  serialNo       String
+  model          String   @default("ZKTeco K40")
+  location       String?
+  ipAddress      String?
+  status         String   @default("online") // online | offline
+  lastSyncAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attendanceLogs AttendanceLog[]
+
+  @@unique([organizationId, serialNo])
+}
+
+// Per-employee daily punch record (upsert on employee+date)
+model AttendanceLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  employeeId     String
+  date           String // YYYY-MM-DD
+  checkIn        String? // HH:MM
+  checkOut       String? // HH:MM
+  status         String   @default("present") // present | late | half_day | absent | on_leave
+  workedMinutes  Int      @default(0)
+  source         String   @default("device") // device | manual
+  deviceId       String?
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  device         Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@unique([employeeId, date])
+  @@index([organizationId, date])
+}
+
+// ─── Leave management (mirrors ERPNext HRMS Leave) ───────────────────────────
+
+model LeaveType {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String // e.g. "ক্যাজুয়াল লিভ"
+  daysPerYear    Int      @default(10)
+  isPaid         Boolean  @default(true)
+  carryForward   Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requests      LeaveRequest[]
+
+  @@unique([organizationId, name])
+}
+
+model LeaveRequest {
+  id             String   @id @default(cuid())
+  organizationId String
+  employeeId     String
+  leaveTypeId    String
+  fromDate       String // YYYY-MM-DD
+  toDate         String // YYYY-MM-DD
+  days           Int
+  reason         String?
+  status         String   @default("pending") // pending | approved | rejected | cancelled
+  reviewerNote   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType      LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+}
+
+// ─── Payroll (BD rules: Basic 50% gross, PF % of basic) ─────────────────────
+
+model SalaryStructure {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  components     SalaryComponent[]
+  payslips       Payslip[]
+
+  @@unique([organizationId, name])
+}
+
+model SalaryComponent {
+  id             String   @id @default(cuid())
+  structureId    String
+  name           String // e.g. "মূল বেতন"
+  abbr           String // BASIC | HRA | MED | CONV | PF ...
+  type           String   @default("earning") // earning | deduction
+  calcType       String   @default("percent") // percent (of gross) | fixed (BDT)
+  value          Float    @default(0)
+  structure      SalaryStructure @relation(fields: [structureId], references: [id], onDelete: Cascade)
+}
+
+model Payslip {
+  id             String   @id @default(cuid())
+  organizationId String
+  employeeId     String
+  structureId    String?
+  period         String // YYYY-MM
+  gross          Int      @default(0)
+  totalEarnings  Int      @default(0)
+  totalDeductions Int     @default(0)
+  netPay         Int      @default(0)
+  pfEmployee     Int      @default(0)
+  pfEmployer     Int      @default(0)
+  status         String   @default("draft") // draft | confirmed | paid
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  structure      SalaryStructure? @relation(fields: [structureId], references: [id], onDelete: SetNull)
+  items          PayslipItem[]
+
+  @@unique([employeeId, period])
+}
+
+model PayslipItem {
+  id             String   @id @default(cuid())
+  payslipId      String
+  label          String
+  type           String   @default("earning") // earning | deduction
+  amount         Int      @default(0)
+  payslip        Payslip @relation(fields: [payslipId], references: [id], onDelete: Cascade)
 }
 
 // ─── Billing & Ops ──────────────────────────────────────────────────────────

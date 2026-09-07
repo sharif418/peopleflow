@@ -134,3 +134,90 @@ Work Log:
 Stage Summary:
 - Phase 1 platform is COMPLETE and browser-verified end-to-end
 - GitHub push BLOCKED on token/repo access — everything else done
+
+---
+Task ID: 4 (planning)
+Agent: CTO (main agent)
+Task: Phase 2 — Core HR modules (Attendance + ZKTeco sync, Leave, Payroll BD, Org Settings)
+
+Work Log:
+- QA via agent-browser: landing/login/portal all stable, no errors — attendance/leave/payroll are placeholders → THIS ROUND's focus
+- Prisma schema extended: Device, AttendanceLog (unique employee+date), LeaveType, LeaveRequest, SalaryStructure, SalaryComponent, Payslip, PayslipItem; Organization + address/contactPhone/contactEmail/weekendConfig/pfEnabled/pfPercent — pushed to SQLite
+- Seed: 2 ZKTeco devices, 14 working-days attendance logs (18 employees, Fri/Sat weekend skipped, aggregates derived from logs), 5 BD leave types + 11 requests (pending/approved/rejected/cancelled), default salary structure (BASIC 50/HRA 30/MED 10/CONV 10) + last-month confirmed payslips for 18 employees
+- i18n: created + registered module namespaces portal.attendance / portal.leave / portal.payroll / portal.settings (files bn-portal-{module}.ts / en-portal-{module}.ts — one OWNER agent each, no shared i18n file edits!)
+
+Stage Summary — CONTRACTS FOR TASK 4 SUBAGENTS (binding):
+- apiFetch<T>(path, init) from @/lib/fetcher; server envelope ok()/fail(); guard requireOrg() from @/lib/api-utils
+- API base: /api/org/<module>/** route.ts files; audit() helper exists in src/app/api/org/_lib/helpers.ts
+- t("portal.attendance.xxx") / t("portal.leave.xxx") / t("portal.payroll.xxx") / t("portal.settings.xxx")
+- Each module default-exports its shell: AttendanceModule (components/portal/attendance/), LeaveModule (components/portal/leave/), PayrollModule (components/portal/payroll/), OrgSettingsModule (components/portal/settings/)
+- MAIN AGENT (me) wires PortalShell nav + PortalSection types + api.ts query keys AFTER subagents deliver. Subagents MUST NOT touch PortalShell.tsx, types.ts, api.ts, index.ts, page.tsx
+- BD payroll math: basic=50% gross, hra=30%, medical=10%, conveyance=remainder; PF=org.pfPercent(12)% of basic (employee+employer)
+
+---
+Task ID: 4-c
+Agent: full-stack-developer (Payroll + Settings)
+Task: Payroll module (BD rules, structures, payslips) + Org settings
+
+Work Log:
+- Read worklog + all contracts (api-utils/fetcher/i18n/schemas/helpers, dashboard StatCard patterns, employees route patterns); verified seeded state (18 confirmed payslips 2026-08, default structure 4 components, org pf 12%)
+- i18n: bn/en-portal-payroll (130 keys each) + bn/en-portal-settings (51 keys each) — full Bengali, exact mirrors, {param} interpolation for generate/toasts/periods
+- Server engine: api/org/payroll/_lib/payroll.ts — pure computePayslip (percent=floor-round of gross, last percent-earning adjusted so earnings sum EXACTLY gross, PF=pfPercent% of BASIC with employer match, Bengali PF label "প্রভিডেন্ট ফান্ড (১২%)"), BD_DEFAULTS export, currentPeriod/isPeriodKey helpers; _lib/schemas.ts (Zod + componentRules: min_earning/percent_range/percent_sum)
+- API routes (all requireOrg + ok/fail + audit on mutations): overview (period stats + breakdown + top-5 recentSlips), structures GET/POST (first becomes default, P2002→name_taken), structures/[id] PATCH (isDefault flips others, components replace) + DELETE (is_default/in_use guards), payslips GET (12/page, period/status/q filters, q via employee relation), payslips/[id] GET (full document + org header + items earnings-first) + PATCH (confirm/mark_paid/revert_draft transition table, paid=409), generate POST (upsert drafts only, skips confirmed/paid, 1.5s delay, structure resolution default→first→BD_DEFAULTS), settings GET/PATCH (weekendConfig array, pfPercent 0-30, name/subdomain read-only)
+- Frontend: PayrollModule.tsx (default export) — month input + period quick-chips, 4 stat cards (PF with employer+employee note), generate AlertDialog (period/structure/count + overwrite warning, spinner, success+skipped toasts), status chips with counts + search, payslip card grid (avatar/code/designation, gross→net arrow, PF badge, status badges draft=muted/confirmed=emerald/paid=success+check, keyboard-accessible, framer-motion stagger), pagination, structures tab (default badge, components ৫০%/৳৫,০০০ emerald/rose, abbr chips, usage count)
+- payslip-detail-dialog.tsx — official-document styling: centered org header (name+address), rotated status stamp, employee grid, earnings/deductions tables (mono ৳ right-aligned), bold totals + big emerald NET PAY, PF footer (কর্মী % + নিয়োগকর্তা % = মোট সঞ্চয়), per-status action buttons with ConfirmDialogs
+- structure-form-dialog.tsx — component row builder (name/abbr/type/calcType/value, add/remove rows), live percent-sum badge, validation mirroring server; keyed remount (no setState-in-effect)
+- OrgSettingsModule.tsx (default export) — Profile card (locked name/subdomain with Lock icon, address textarea, phone/email, dirty-aware save), Workweek card (7 toggle pills, workday=emerald/weekend=muted + legend + hint), Payroll config card (PF Switch + 0-30 slider with Bengali numeral display + next-generation info alert), Info card (plan badge via PLANS, employee count, setup status, created date, subdomain) — state initialized in child components from `initial` prop (React-compiler clean)
+- Fixed lint errors (react-hooks/set-state-in-effect) via keyed remount + child-component state init; fixed settings PATCH Zod nullable/optional bug found by curl
+
+Stage Summary:
+- Endpoints (all curl-verified with cookie login): GET overview?period=2026-08 (18 confirmed, gross 485000, net 455900, pf 58200); GET structures (1 default, 4 comps); POST generate 2026-09 → {generated:18, skipped:0}, re-gen after 1 paid → {generated:17, skipped:1}; GET payslips?period=2026-08&status=confirmed → 18 (12/page); GET payslips/[id] → 5 items, earnings sum == gross to the taka; PATCH confirm → confirmed, mark_paid → paid, paid→revert = 409; structures POST 0-earnings → 400 min_earning, percent_sum guard, DELETE is_default/in_use guards, isDefault flip works; settings GET/PATCH + validation errors (phone/email/day/pfPercent>30 → 400); audit entries (payroll.generated, payroll.payslip.confirmed, settings.updated) written
+- bun run lint: 0 errors (1 pre-existing known warning in employees-view); tsc --noEmit: clean for all owned files; dev.log: zero errors; test data cleaned (DB back to seeded state)
+- Main agent wiring contract: `PayrollModule` default-export from components/portal/payroll/PayrollModule (no props), `OrgSettingsModule` from components/portal/settings/OrgSettingsModule (no props); query keys ["org","payroll",*] / ["org","settings"]; computePayslip + BD_DEFAULTS reusable from api/org/payroll/_lib/payroll (pure, no next/server import)
+
+---
+Task ID: 4-a
+Agent: full-stack-developer (Attendance)
+Task: Attendance module — ZKTeco-style device sync, today grid, month register, manual punch
+
+Work Log:
+- Read worklog + all contracts (api-utils, fetcher, employees route/_lib patterns, i18n style, dashboard/employees views, format.ts, shared components)
+- Filled i18n dictionaries bn-portal-attendance.ts / en-portal-attendance.ts (~153 keys: title, stats, tabs, statuses, devices, sync phases, today, month (day names, short codes), punch dialog, relative time, toasts, errors)
+- Backend helpers src/app/api/org/attendance/_lib/attendance.ts: localIsoDate/localIsoMonth, time↔minutes, weekendConfig parser, computePunch (present if checkIn ≤ shiftStart+10min grace else late; absent/on_leave if no checkIn; workedMinutes = out−in−60min lunch), recomputeAttendanceDay (upserts AttendanceDay from logs, half_day→present), loadEmployeesWithLogs, toDayItem; _lib/schemas.ts (Zod v4: punch, sync, device create/patch + zodError)
+- API routes (all requireOrg + ok/fail envelope + audit() on writes):
+  • GET /api/org/attendance?date= → {date, isWeekend, stats{present,late,absent,onLeave,halfDay,noRecord}, items[18]} (one row per active/probation employee + shift + log)
+  • POST /api/org/attendance → manual punch upsert (employee+date unique), status from shift unless explicit, source "manual", recomputes AttendanceDay, audits attendance.manual_punch
+  • GET /api/org/attendance/month?month= → {month, days[{date,dayOfWeek,isWeekend}], rows[{code,name,summary{present,late,absent,onLeave,halfDays,noRecord,workedHours},byDate}], totals}
+  • POST /api/org/attendance/sync → ZKTeco-style pull: 1.2s delay, missing|full mode, deterministic prand per (code,day): checkIn shiftStart−15..+35, checkOut shiftEnd±40 (past) / 60% null (today, still working), source "device"+deviceId, device.status online + lastSyncAt now, recompute AttendanceDay, audit attendance.device_sync → {syncedCount, date, mode, device, log[day-items]}
+  • GET /api/org/attendance/devices → devices + today's device-source punch counts (groupBy deviceId)
+  • POST /api/org/attendance/devices → add (name+serialNo required, IPv4 regex, unique per org → P2002 serial_taken)
+  • PATCH /api/org/attendance/devices/[id] → rename/location/ip/status
+- Frontend src/components/portal/attendance/: AttendanceModule.tsx (default export — PageHeader + 4 StatCards (উপস্থিত/দেরি/অনুপস্থিত/ছুটিতে, emerald/amber/red/teal) + ofTotal caption + DeviceCards + Tabs আজকের হাজিরা/মাসিক রেজিস্টার with framer-motion transitions); device-cards.tsx (horizontal snap-scroll cards: model, serial mono, IP, live pulse dot online/offline, Bengali relative time "২ ঘণ্টা আগে", today punch count, sync button with phase text connect→read→save + animated progress bar; + dashed add-device card → dialog with model select K40/iClock 990/SF300/অন্য); today-view.tsx (date picker + full Bengali date, deferred search, weekend banner, no-records sync CTA, desktop table (avatar/code/dept, mono in/out, status badge with live pulse dot, worked hours, Fingerprint/PenLine source) / mobile cards, max-h-560 pf-scrollbar); month-view.tsx (month picker + legend, desktop sticky-column/sticky-header matrix with 30 day cols, weekend tint, status dots with checkIn tooltips, per-row summary in sticky cell, totals tfoot; mobile accordion with dot strip + summary grid + totals card); punch-dialog.tsx (manual upsert: time inputs, status select auto/5 statuses, note, live worked preview, error mapping); use-device-sync.ts (shared mutation + phase hook); attendance-types.ts (types + query keys + endpoints); attendance-labels.ts (status badge/dot colors incl. teal on_leave, orange half_day, relative time, worked hours, date/month labels)
+- Verification: bunx eslint on my files → 0 errors/0 warnings; bunx tsc --noEmit → 0 errors in my files; SSR smoke test (renderToString with mocked query cache, 18 employees + 30-day month) rendered both tabs fully (177KB/161KB HTML) — then deleted; curl-verified all 7 endpoints incl. error paths (invalid_date, invalid_time_range, invalid_employee 404, serial_taken 409, device_not_found 404); sync full→18 records + AttendanceDay recompute confirmed via /api/org/overview; audit rows verified via prisma; browser regression: landing+login+portal OK, zero console/page errors; re-seeded DB to pristine demo state after testing
+
+Stage Summary:
+- Endpoints built: 7 (GET/POST day, GET month, POST sync, GET/POST devices, PATCH devices/[id]) — all curl-verified 200/400/404/409 as appropriate
+- Components built: AttendanceModule (default export, ready for PortalShell wiring via `feature:attendance`) + 7 subcomponents in components/portal/attendance/
+- Files created: 2 i18n dicts, 6 API route files + 2 _lib helpers, 8 component files (all inside my owned paths only)
+- i18n: 153 keys full Bengali + matching English, accessed as t("portal.attendance.*"); all 106 used keys verified resolvable
+- Notes for main agent: AttendanceModule takes NO props (self-contained); query keys ["org","attendance",...] — invalidate prefix ["org","attendance"] + ["org","overview"] on mutations (already done internally); month matrix uses raw <table> (not shadcn Table) for sticky column+header with border-separate
+
+---
+Task ID: 4-b
+Agent: full-stack-developer (Leave)
+Task: Leave module — types CRUD, requests + approvals, balances
+
+Work Log:
+- Read worklog + contracts (api-utils, fetcher, org employees route, _lib helpers/schemas, bn-portal style, format.ts, PortalShell wiring contract)
+- i18n: filled src/lib/i18n/bn-portal-leave.ts + en-portal-leave.ts (~125 keys: title/stats/tabs/status/filters/requests/actions/review/create/types/balances/toasts/errors/time) — exact bn/en mirrors, accessed as t("portal.leave.xxx")
+- API helpers in src/app/api/org/leave/_lib/ (own folder, org _lib untouched): helpers.ts (parseWeekend from weekendConfig w/ fri+sat default, isoOf/todayIso, calendarSpan, rangesOverlap, countWorkingDays, LEAVE_REQUEST_INCLUDE, activeLeaveRequests, buildUsageIndex, balanceExcludingSelf, hasOverlap) + schemas.ts (Zod v4: type create/patch, request create, request action + zodLeaveError flattening)
+- Routes: types GET(usage counts: approved/pending/employeesOnLeaveToday)+POST(unique name→409 name_taken); types/[id] PATCH+DELETE(in_use 409 guard, audit); requests GET(status comma-filter, employeeId, q over name/code/reason, 12/page, pending-first then createdAt desc, per-row overlapsExisting/exceedsBalance/balanceAvailable, summary {pending,approvedToday,approvedMonth,onLeaveToday,rejectedMonth,totalTypes}) + POST(date validations invalid_range/past_date/span_too_long, weekend_only, overlap 409, insufficient_balance 409, days=working days excl weekend, status pending, audit leave.requested); requests/[id] PATCH approve/reject/cancel (not_pending 409, approve re-validates balance, reviewerNote+reviewedAt, audit leave.approved/rejected/cancelled); balances GET ?year (per active employee rows {allocated,used,pending,remaining} + totalUsed + type list)
+- Frontend src/components/portal/leave/: LeaveModule.tsx (default export; PageHeader + 4 StatCards — pending warning+pulse, onLeaveToday, approvedMonth, totalTypes; shadcn Tabs + framer-motion tab fade; stats share cache with requests tab via identical default query key), requests-tab.tsx (filter chips সব/অপেক্ষমাণ/অনুমোদিত/বাতিল+প্রত্যাখ্যাত, search, pagination, stagger list, optimistic status update + rollback + invalidate + sonner, ConfirmDialog cancel), request-card.tsx (avatar+name+code, hue badge, Bengali date range ১২ জানুয়ারী – ১৪ জানুয়ারী via Intl bn-BD long month, days badge, reason, ⚠ ওভারল্যাপ/⚠ ব্যালেন্স অতিরিক্ত chips, balanceAvailable, reviewerNote, 3 action buttons), review-dialog.tsx (approve/reject + optional note), create-request-dialog.tsx (RHF+Zod, searchable employee combobox Popover+Command, type Select, native dates, live working-days preview excl Fri/Sat, live balance line + warning from balances query), types-tab.tsx (card grid, paid/carry badges, usage stats, edit/delete), type-form-dialog.tsx (RHF+Zod + Switch rows, Bengali days preview), balances-tab.tsx (year select, desktop table per-type columns + mobile stacked cards, emerald→amber→rose progress bars at 60%/85%, max-h-34rem pf-scrollbar), types.ts (response types, leaveKeys, LEAVE_ENDPOINTS, status filter map), utils.ts (5 fixed hues emerald/amber/teal/rose/violet, status badges, formatLeaveDate/Range, relativeLeaveTime, workingDaysClient, progressTone, leaveErrorMessage error-code→i18n map)
+- Replaced form.watch with useWatch (React Compiler clean); StatCard trendLabel dropped (renders only with numeric trend)
+- Verification: eslint on my files → 0 errors/0 warnings (project-wide remaining errors are Task 4-c's payroll file, untouched); tsc --noEmit → 0 errors in leave files; curl cookie-flow suite (/home/z/leave-tests/leave_tests.py) → 41/41 PASS incl. login, types CRUD + in_use/name_taken/validation guards, requests filters/search/summary, weekend-only Fri–Sat 400, overlap 409, insufficient_balance 409 (POST + approve-time revalidation after type days edit), approve/reject/cancel with notes, not_pending 409, balances + invalid_year 400; dev.log clean; DB reseeded to pristine demo state after testing (seed actually has 7 pending + 2 approved + 1 rejected + 1 cancelled = 11 — brief's "8 pending" was off by one)
+
+Stage Summary:
+- Endpoints (all org-scoped, ok/fail envelope, audit-logged mutations): GET+POST /api/org/leave/types; PATCH+DELETE /api/org/leave/types/[id]; GET+POST /api/org/leave/requests; PATCH /api/org/leave/requests/[id]; GET /api/org/leave/balances?year=
+- Components: LeaveModule (default export, ready for PortalShell wiring via feature:leave) + 8 subcomponents, mobile-first, emerald palette (no indigo/blue), dark-mode via semantic tokens, framer-motion stagger/fade, skeletons + EmptyState + retry, sonner toasts, TanStack Query with shared leaveKeys.all invalidation
+- i18n: bn-portal-leave.ts / en-portal-leave.ts filled and registered (no shared file edits)
+- Risks: requests GET does JS-side sort/paginate after Prisma filter (pending-first not expressible in Prisma orderBy) — fine at sandbox scale; client working-day preview hardcodes Fri/Sat (org weekendConfig not exposed in session store — server is the source of truth); balances include status="active" employees only; dev server was found dead mid-task and restarted detached (bun run dev, port 3000)

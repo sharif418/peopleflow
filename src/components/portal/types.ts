@@ -48,6 +48,8 @@ export interface OverviewData {
   payrollMonthly: number
   attendance: OverviewAttendanceDay[]
   headcountByDept: { name: string | null; count: number }[]
+  salaryByDept?: { name: string | null; total: number }[]
+  pendingLeaveRequests?: number
   recentHires: {
     id: string
     employeeCode: string
@@ -78,6 +80,7 @@ export type PortalSection =
   | "designations"
   | "branches"
   | "shifts"
+  | "settings"
   | "modules"
   | `feature:${string}`
 

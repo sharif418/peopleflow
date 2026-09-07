@@ -25,7 +25,7 @@ export async function GET() {
   const orgId = guard.org.id
 
   try {
-    const [statusGroups, latestAttendance, payrollAgg, attendance14, deptGroups, recentHires] =
+    const [statusGroups, latestAttendance, payrollAgg, attendance14, deptGroups, recentHires, salaryByDeptRaw, pendingLeaveRaw] =
       await Promise.all([
         db.employee.groupBy({ by: ["status"], _count: { _all: true }, where: { organizationId: orgId } }),
         db.attendanceDay.findFirst({ where: { organizationId: orgId }, orderBy: { date: "desc" } }),
@@ -58,6 +58,14 @@ export async function GET() {
             dateOfJoining: true,
           },
         }),
+        db.employee.groupBy({
+          by: ["departmentId"],
+          _sum: { monthlySalary: true },
+          where: { organizationId: orgId, status: { in: ["active", "probation"] } },
+        }),
+        db.leaveRequest.count({
+          where: { organizationId: orgId, status: "pending" },
+        }),
       ])
 
     const statusMap: Record<string, number> = {}
@@ -77,6 +85,13 @@ export async function GET() {
       deptNameMap,
     )
 
+    const salaryByDept = salaryByDeptRaw
+      .map((d) => ({
+        name: d.departmentId ? (deptNameMap.get(d.departmentId) ?? null) : null,
+        total: d._sum.monthlySalary ?? 0,
+      }))
+      .sort((a, b) => b.total - a.total)
+
     return ok({
       employees: {
         total,
@@ -95,6 +110,8 @@ export async function GET() {
       payrollMonthly: payrollAgg._sum.monthlySalary ?? 0,
       attendance: [...attendance14].reverse(),
       headcountByDept,
+      salaryByDept,
+      pendingLeaveRequests: pendingLeaveRaw,
       recentHires: recentHires.map((e) => ({
         id: e.id,
         employeeCode: e.employeeCode,

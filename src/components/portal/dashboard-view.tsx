@@ -1,14 +1,17 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { Banknote, CalendarCheck2, UserPlus, Users, UserRoundX, UsersRound, ArrowRight } from "lucide-react"
+import { Banknote, CalendarCheck2, CalendarOff, Fingerprint, UserPlus, Users, UserRoundX, UsersRound, ArrowRight, CheckCheck } from "lucide-react"
+import { useSessionStore } from "@/store/session"
 import { useI18n } from "@/lib/i18n"
 import { apiFetch } from "@/lib/fetcher"
 import { formatBdt, formatDate, formatNumber, initialsOf, toBnDigits } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import {
   ChartContainer,
   ChartLegend,
@@ -22,6 +25,7 @@ import { PageHeader } from "@/components/shared/page-header"
 import { StatCard } from "@/components/shared/stat-card"
 import { EmptyState } from "@/components/shared/empty-state"
 import { orgKeys } from "./api"
+import { featureSection } from "./types"
 import type { OverviewData, PortalSection } from "./types"
 
 const chartConfig = {
@@ -39,6 +43,8 @@ function shortDate(date: string, lang: "bn" | "en"): string {
 
 export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) => void }) {
   const { lang, t } = useI18n()
+  const { org } = useSessionStore()
+  const flags = org?.featureFlags ?? {}
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: orgKeys.overview,
     queryFn: () => apiFetch<OverviewData>("/api/org/overview"),
@@ -95,6 +101,15 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
     count: d.count,
   }))
 
+  const salaryData = (data.salaryByDept ?? []).map((d) => ({
+    name: d.name ?? t("portal.common.notSet"),
+    total: Math.round(d.total / 1000), // display in thousands (৳ হাজার)
+  }))
+
+  const pendingLeave = data.pendingLeaveRequests ?? 0
+  const attendanceEnabled = !!flags.attendance
+  const leaveEnabled = !!flags.leave
+
   return (
     <div className="space-y-6">
       <PageHeader title={t("portal.dash.title")} subtitle={t("portal.dash.subtitle")} icon={Users} />
@@ -120,6 +135,32 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
           icon={Banknote}
         />
       </div>
+
+      {/* Pending leave alert (feature-aware) */}
+      {leaveEnabled && pendingLeave > 0 && (
+        <button
+          type="button"
+          onClick={() => onNavigate(featureSection("leave"))}
+          className="group flex w-full items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-left transition-all hover:border-warning/50 hover:bg-warning/15"
+          aria-label={t("portal.dash.pendingLeaveAlert")}
+        >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-warning/20 text-warning-foreground">
+            <CalendarOff className="size-4.5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-foreground">
+              {t("portal.dash.pendingLeaveAlert")}
+            </span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {t("portal.dash.pendingLeaveAlertDesc", { n: formatNumber(pendingLeave, lang) })}
+            </span>
+          </span>
+          <Badge className="shrink-0 border-warning/40 bg-warning/20 text-warning-foreground tabular-nums">
+            {formatNumber(pendingLeave, lang)}
+          </Badge>
+          <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
+        </button>
+      )}
 
       {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -201,7 +242,117 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
         </Card>
       </div>
 
-      {/* Recent hires + quick actions */}
+      {/* Salary by department + quick actions */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="border-border/80 shadow-xs lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t("portal.dash.salaryByDept")}</CardTitle>
+            <p className="text-xs text-muted-foreground">{t("portal.dash.salaryByDeptSubtitle")}</p>
+          </CardHeader>
+          <CardContent>
+            {salaryData.length === 0 ? (
+              <EmptyState icon={Banknote} title={t("portal.dash.noSalaryData")} />
+            ) : (
+              <ChartContainer
+                config={{
+                  total: { label: t("portal.dash.salaryThousands"), color: "var(--chart-2)" },
+                }}
+                className="aspect-auto h-64 w-full"
+              >
+                <BarChart data={salaryData} layout="vertical" margin={{ left: 8, right: 24, top: 4, bottom: 4 }}>
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    width={120}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        hideLabel
+                        formatter={(value) =>
+                          lang === "bn"
+                            ? `${toBnDigits(String(Math.round(Number(value) * 1000) / 1000))} ৳ হাজার`
+                            : `৳${value}k`
+                        }
+                      />
+                    }
+                    cursor={{ fill: "var(--muted)" }}
+                  />
+                  <Bar dataKey="total" fill="var(--chart-2)" radius={[0, 6, 6, 0]} barSize={18} />
+                </BarChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-4">
+          <Card className="border-border/80 shadow-xs">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">{t("portal.dash.quickActions")}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {attendanceEnabled && (
+                <Button
+                  variant="outline"
+                  className="h-auto w-full justify-start gap-3 py-3"
+                  onClick={() => onNavigate(featureSection("attendance"))}
+                >
+                  <Fingerprint className="size-5 shrink-0 text-primary" aria-hidden />
+                  <span className="text-left">
+                    <span className="block text-sm font-semibold">{t("portal.dash.viewAttendance")}</span>
+                    <span className="block text-xs font-normal opacity-80">{t("portal.dash.viewAttendanceDesc")}</span>
+                  </span>
+                </Button>
+              )}
+              {leaveEnabled && (
+                <Button
+                  variant="outline"
+                  className="h-auto w-full justify-start gap-3 py-3"
+                  onClick={() => onNavigate(featureSection("leave"))}
+                >
+                  <CalendarOff className="size-5 shrink-0 text-primary" aria-hidden />
+                  <span className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left">
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">{t("portal.dash.reviewLeave")}</span>
+                      <span className="block truncate text-xs font-normal opacity-80">{t("portal.dash.reviewLeaveDesc")}</span>
+                    </span>
+                    {pendingLeave > 0 && (
+                      <Badge className="shrink-0 border-warning/40 bg-warning/20 text-warning-foreground tabular-nums">
+                        {formatNumber(pendingLeave, lang)}
+                      </Badge>
+                    )}
+                  </span>
+                </Button>
+              )}
+              <Button className="h-auto w-full justify-start gap-3 py-3" onClick={() => onNavigate("employees")}>
+                <UserPlus className="size-5 shrink-0" aria-hidden />
+                <span className="text-left">
+                  <span className="block text-sm font-semibold">{t("portal.dash.addEmployee")}</span>
+                  <span className="block text-xs font-normal opacity-80">{t("portal.dash.addEmployeeDesc")}</span>
+                </span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-auto w-full justify-start gap-3 py-3"
+                onClick={() => onNavigate("modules")}
+              >
+                <ArrowRight className="size-5 shrink-0" aria-hidden />
+                <span className="text-left">
+                  <span className="block text-sm font-semibold">{t("portal.dash.viewModules")}</span>
+                  <span className="block text-xs font-normal opacity-80">{t("portal.dash.viewModulesDesc")}</span>
+                </span>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Recent hires */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="border-border/80 shadow-xs lg:col-span-2">
           <CardHeader className="pb-3">
@@ -246,18 +397,12 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
           </CardContent>
         </Card>
 
+        {/* Mini: view employees */}
         <Card className="border-border/80 shadow-xs">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">{t("portal.dash.quickActions")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Button className="h-auto w-full justify-start gap-3 py-3" onClick={() => onNavigate("employees")}>
-              <UserPlus className="size-5 shrink-0" aria-hidden />
-              <span className="text-left">
-                <span className="block text-sm font-semibold">{t("portal.dash.addEmployee")}</span>
-                <span className="block text-xs font-normal opacity-80">{t("portal.dash.addEmployeeDesc")}</span>
-              </span>
-            </Button>
             <Button
               variant="outline"
               className="h-auto w-full justify-start gap-3 py-3"
@@ -272,12 +417,12 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
             <Button
               variant="outline"
               className="h-auto w-full justify-start gap-3 py-3"
-              onClick={() => onNavigate("modules")}
+              onClick={() => onNavigate("shifts")}
             >
-              <ArrowRight className="size-5 shrink-0" aria-hidden />
+              <CheckCheck className="size-5 shrink-0" aria-hidden />
               <span className="text-left">
-                <span className="block text-sm font-semibold">{t("portal.dash.viewModules")}</span>
-                <span className="block text-xs font-normal opacity-80">{t("portal.dash.viewModulesDesc")}</span>
+                <span className="block text-sm font-semibold">{t("portal.dash.viewShifts")}</span>
+                <span className="block text-xs font-normal opacity-80">{t("portal.dash.viewShiftsDesc")}</span>
               </span>
             </Button>
           </CardContent>

@@ -18,6 +18,10 @@ function monthKey(n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
+function localIso(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+}
+
 const PLAN_FEATURES: Record<string, string[]> = {
   starter: ["hr_core", "attendance", "leave"],
   growth: ["hr_core", "attendance", "leave", "payroll", "recruitment", "expense", "performance"],
@@ -94,6 +98,14 @@ async function main() {
   // wipe
   await db.auditLog.deleteMany()
   await db.invoice.deleteMany()
+  await db.payslipItem.deleteMany()
+  await db.payslip.deleteMany()
+  await db.salaryComponent.deleteMany()
+  await db.salaryStructure.deleteMany()
+  await db.leaveRequest.deleteMany()
+  await db.leaveType.deleteMany()
+  await db.attendanceLog.deleteMany()
+  await db.device.deleteMany()
   await db.attendanceDay.deleteMany()
   await db.employee.deleteMany()
   await db.shift.deleteMany()
@@ -224,24 +236,225 @@ async function main() {
   )
   console.log(`  ✓ ${employees.length} employees (আকাশ গার্মেন্টস)`)
 
-  // attendance last 14 days
-  const active = employees.filter((e) => e.status === "active" || e.status === "probation").length
-  for (let d = 13; d >= 0; d--) {
-    const date = isoDate(d)
-    const absent = d % 7 === 3 ? 3 : d % 5 === 0 ? 2 : 1
-    const late = d % 4 === 0 ? 3 : 1
-    const onLeave = d % 6 === 2 ? 2 : 1
-    await db.attendanceDay.create({
+  // (attendance days now derived from per-employee logs below — single source of truth)
+
+  const org1 = await db.organization.update({
+    where: { id: akashId },
+    data: {
+      address: "হোল্ডিং নং ১২/এ, গুলশান-১, ঢাকা-১২১২",
+      contactPhone: "+8801711002200",
+      contactEmail: "info@akashgarments.com",
+      weekendConfig: "friday,saturday",
+    },
+  })
+
+  // ── Attendance devices (ZKTeco-style) ──
+  const devices = await Promise.all([
+    db.device.create({
       data: {
         organizationId: akashId,
-        date,
-        present: Math.max(active - absent - late - onLeave, 0),
-        absent,
-        late,
-        onLeave,
+        name: "মেইন গেট — K40",
+        serialNo: "AKZ6L22104001",
+        model: "ZKTeco K40",
+        location: "হেড অফিস (গুলশান)",
+        ipAddress: "192.168.1.201",
+        status: "online",
+        lastSyncAt: daysAgo(0),
+      },
+    }),
+    db.device.create({
+      data: {
+        organizationId: akashId,
+        name: "প্রোডাকশন ফ্লোর — iClock 990",
+        serialNo: "AKZ9L22104002",
+        model: "ZKTeco iClock 990",
+        location: "ফ্যাক্টরি-১ (নারায়ণগঞ্জ)",
+        ipAddress: "192.168.2.105",
+        status: "offline",
+        lastSyncAt: daysAgo(2),
+      },
+    }),
+  ])
+
+  // ── Attendance logs: last 14 days (skip BD weekend Fri+Sat), per employee ──
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const activeEmployees = employees.filter((e) => e.status === "active" || e.status === "probation")
+  const dailyAgg: Record<string, { present: number; absent: number; late: number; onLeave: number }> = {}
+
+  // deterministic pseudo-random per (employee, day)
+  function prand(seed: number): number {
+    const x = Math.sin(seed * 9973) * 10000
+    return x - Math.floor(x)
+  }
+
+  for (let d = 13; d >= 0; d--) {
+    const dateObj = new Date(Date.now() - d * DAY_MS)
+    const dow = dateObj.getDay() // 5=Fri, 6=Sat
+    if (dow === 5 || dow === 6) continue
+    const date = localIso(dateObj)
+    dailyAgg[date] = { present: 0, absent: 0, late: 0, onLeave: 0 }
+
+    for (let i = 0; i < activeEmployees.length; i++) {
+      const emp = activeEmployees[i]
+      const r = prand(emp.employeeCode.charCodeAt(5) + d * 31 + i * 7)
+      const deviceId = i % 2 === 0 ? devices[0].id : devices[1].id
+      const shift = shifts[0] // simplified timing base 09:00
+      let status = "present"
+      let checkIn: string | null = null
+      let checkOut: string | null = null
+
+      if (r < 0.05) {
+        status = "absent"
+      } else if (r < 0.12) {
+        status = "on_leave"
+      } else {
+        // punch in between 08:45 and 09:35
+        const inMin = 8 * 60 + 45 + Math.floor(prand(i + d * 13) * 50)
+        const lateMin = inMin - (9 * 60)
+        status = lateMin > 10 ? "late" : "present"
+        checkIn = `${String(Math.floor(inMin / 60)).padStart(2, "0")}:${String(inMin % 60).padStart(2, "0")}`
+        if (d > 0) {
+          // past days get check-out; today only some (early leavers)
+          if (d > 0 || r > 0.6) {
+            const outMin = Math.min(22 * 60, 17 * 60 + 40 + Math.floor(prand(d + i * 3) * 90))
+            checkOut = `${String(Math.floor(outMin / 60)).padStart(2, "0")}:${String(outMin % 60).padStart(2, "0")}`
+          }
+        } else if (r > 0.55) {
+          const outMin = 18 * 60 + Math.floor(prand(i * 11 + d) * 30)
+          checkOut = `${String(Math.floor(outMin / 60)).padStart(2, "0")}:${String(outMin % 60).padStart(2, "0")}`
+        }
+      }
+
+      const workedMinutes = checkIn && checkOut
+        ? (Number(checkOut.slice(0, 2)) * 60 + Number(checkOut.slice(3)) - (Number(checkIn.slice(0, 2)) * 60 + Number(checkIn.slice(3))))
+        : 0
+
+      await db.attendanceLog.create({
+        data: {
+          organizationId: akashId,
+          employeeId: emp.id,
+          date,
+          checkIn,
+          checkOut,
+          status,
+          workedMinutes: Math.max(0, workedMinutes - 60), // 1h lunch break
+          source: "device",
+          deviceId: status === "absent" || status === "on_leave" ? null : deviceId,
+        },
+      })
+
+      const agg = dailyAgg[date]!
+      if (status === "on_leave") agg.onLeave++
+      else if (status === "absent") agg.absent++
+      else if (status === "late") agg.late++
+      else agg.present++
+    }
+  }
+  for (const [date, agg] of Object.entries(dailyAgg)) {
+    await db.attendanceDay.create({ data: { organizationId: akashId, date, ...agg } })
+  }
+  console.log("  ✓ attendance logs + devices (আকাশ গার্মেন্টস)")
+
+  // ── Leave types & requests ──
+  const leaveTypes = await Promise.all(
+    [
+      { name: "ক্যাজুয়াল লিভ", daysPerYear: 10, isPaid: true, carryForward: false },
+      { name: "সিক লিভ", daysPerYear: 14, isPaid: true, carryForward: false },
+      { name: "অর্জিত ছুটি", daysPerYear: 12, isPaid: true, carryForward: true },
+      { name: "মাতৃত্বকালীন ছুটি", daysPerYear: 112, isPaid: true, carryForward: false },
+      { name: "অবৈতনিক ছুটি", daysPerYear: 20, isPaid: false, carryForward: false },
+    ].map((lt) => db.leaveType.create({ data: { organizationId: akashId, ...lt } })),
+  )
+
+  const leaveRequestsData = [
+    { emp: 3, type: 1, from: 5, days: 2, reason: "জ্বর ও শরীর খারাপ", status: "approved", note: "শুভকামনা" },
+    { emp: 6, type: 0, from: 3, days: 1, reason: "পারিবারিক কাজ", status: "approved", note: null },
+    { emp: 9, type: 2, from: -2, days: 3, reason: "গ্রামের বাড়ি যাবো", status: "pending", note: null },
+    { emp: 12, type: 0, from: -1, days: 1, reason: "ব্যাংকে কাজ", status: "pending", note: null },
+    { emp: 15, type: 1, from: 4, days: 1, reason: "ডাক্তারের অ্যাপয়েন্টমেন্ট", status: "pending", note: null },
+    { emp: 1, type: 2, from: 10, days: 2, reason: "দাদার সাথে দেখা", status: "pending", note: null },
+    { emp: 4, type: 0, from: 8, days: 1, reason: "স্কুলে বাচ্চার ভর্তি", status: "pending", note: null },
+    { emp: 2, type: 2, from: 15, days: 5, reason: "হজ যাওয়ার প্ল্যান", status: "pending", note: null },
+    { emp: 7, type: 3, from: 20, days: 90, reason: "প্রসবকালীন", status: "pending", note: null },
+    { emp: 10, type: 0, from: 12, days: 2, reason: "বিয়ের জন্য", status: "rejected", note: "ওই সময় প্রোডাকশন পিকে" },
+    { emp: 13, type: 1, from: 20, days: 1, reason: "শরীর খারাপ", status: "cancelled", note: null },
+  ]
+  for (const lr of leaveRequestsData) {
+    const fromDate = new Date(Date.now() + lr.from * DAY_MS)
+    const toDate = new Date(fromDate.getTime() + (lr.days - 1) * DAY_MS)
+    await db.leaveRequest.create({
+      data: {
+        organizationId: akashId,
+        employeeId: employees[lr.emp].id,
+        leaveTypeId: leaveTypes[lr.type].id,
+        fromDate: localIso(fromDate),
+        toDate: localIso(toDate),
+        days: lr.days,
+        reason: lr.reason,
+        status: lr.status,
+        reviewerNote: lr.note,
+        reviewedAt: lr.status === "approved" || lr.status === "rejected" ? daysAgo(1) : null,
+        createdAt: daysAgo(Math.max(1, 7 - Math.abs(lr.from) % 7)),
       },
     })
   }
+  console.log("  ✓ leave types + requests (আকাশ গার্মেন্টস)")
+
+  // ── Salary structure + payslips (last month, confirmed) ──
+  const structure = await db.salaryStructure.create({
+    data: {
+      organizationId: akashId,
+      name: "স্ট্যান্ডার্ড (BD)",
+      isDefault: true,
+      components: {
+        create: [
+          { name: "মূল বেতন", abbr: "BASIC", type: "earning", calcType: "percent", value: 50 },
+          { name: "বাড়ি ভাড়া ভাতা", abbr: "HRA", type: "earning", calcType: "percent", value: 30 },
+          { name: "চিকিৎসা ভাতা", abbr: "MED", type: "earning", calcType: "percent", value: 10 },
+          { name: "যাতায়াত ভাতা", abbr: "CONV", type: "earning", calcType: "percent", value: 10 },
+        ],
+      },
+    },
+    include: { components: true },
+  })
+
+  const lastPeriod = monthKey(1)
+  for (const emp of activeEmployees) {
+    const gross = emp.monthlySalary ?? 0
+    if (!gross) continue
+    const basic = Math.round(gross * 0.5)
+    const hra = Math.round(gross * 0.3)
+    const medical = Math.round(gross * 0.1)
+    const conveyance = gross - basic - hra - medical
+    const pf = Math.round((basic * org1.pfPercent) / 100)
+    const net = gross - pf
+    const slip = await db.payslip.create({
+      data: {
+        organizationId: akashId,
+        employeeId: emp.id,
+        structureId: structure.id,
+        period: lastPeriod,
+        gross,
+        totalEarnings: gross,
+        totalDeductions: pf,
+        netPay: net,
+        pfEmployee: pf,
+        pfEmployer: pf,
+        status: "confirmed",
+        items: {
+          create: [
+            { label: "মূল বেতন", type: "earning", amount: basic },
+            { label: "বাড়ি ভাড়া ভাতা", type: "earning", amount: hra },
+            { label: "চিকিৎসা ভাতা", type: "earning", amount: medical },
+            { label: "যাতায়াত ভাতা", type: "earning", amount: conveyance },
+            { label: "প্রভিডেন্ট ফান্ড (১২%)", type: "deduction", amount: pf },
+          ],
+        },
+      },
+    })
+    void slip
+  }
+  console.log("  ✓ salary structure + payslips (আকাশ গার্মেন্টস)")
 
   // ── Org 2: ঢাকা টেক সলিউশনস (starter) ──
   const dhakaTechId = await createOrg({

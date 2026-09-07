@@ -194,3 +194,110 @@
 .animate-float {
   animation: float-y 5s ease-in-out infinite;
 }
+
+/* ─── Phase 2 module polish ─────────────────────────────────────────────── */
+
+/* Interactive cards (device cards, request cards, payslip cards) */
+.pf-card-hover {
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.pf-card-hover:hover {
+  border-color: color-mix(in oklab, var(--primary) 32%, var(--border));
+  box-shadow: 0 2px 12px -4px color-mix(in oklab, var(--primary) 18%, transparent);
+}
+@media (hover: none) {
+  .pf-card-hover:active {
+    border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+  }
+}
+
+/* Attendance status dots — live pulse for present, calm for others */
+.pf-dot {
+  position: relative;
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.pf-dot-live::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+  opacity: 0.55;
+  animation: pf-dot-pulse 1.8s ease-out infinite;
+}
+@keyframes pf-dot-pulse {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+  70%,
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+/* Skeleton shimmer upgrade for module lists */
+.pf-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.pf-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--foreground) 6%, transparent), transparent);
+  animation: pf-shimmer-sweep 1.4s ease infinite;
+}
+@keyframes pf-shimmer-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Money figures — tabular alignment everywhere */
+.pf-money {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Payslip dialog — print-friendly document */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .pf-payslip-print,
+  .pf-payslip-print * {
+    visibility: visible;
+  }
+  .pf-payslip-print {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Subtle gradient hairline separators in module cards */
+.pf-hairline {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--border) 85%, transparent),
+    transparent
+  );
+  height: 1px;
+}
+
+/* Monospace time figures (punch in/out) */
+.pf-time {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}

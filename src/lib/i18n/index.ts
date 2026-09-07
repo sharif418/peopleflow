@@ -6,14 +6,42 @@ import { bnAdmin } from "./bn-admin"
 import { enAdmin } from "./en-admin"
 import { bnPortal } from "./bn-portal"
 import { enPortal } from "./en-portal"
+import { bnPortalAttendance } from "./bn-portal-attendance"
+import { enPortalAttendance } from "./en-portal-attendance"
+import { bnPortalLeave } from "./bn-portal-leave"
+import { enPortalLeave } from "./en-portal-leave"
+import { bnPortalPayroll } from "./bn-portal-payroll"
+import { enPortalPayroll } from "./en-portal-payroll"
+import { bnPortalSettings } from "./bn-portal-settings"
+import { enPortalSettings } from "./en-portal-settings"
 import { useSessionStore } from "@/store/session"
 import type { Lang } from "@/lib/types"
 
 type Dict = Record<string, unknown>
 
 const dictionaries: Record<Lang, Record<string, Dict>> = {
-  bn: { ...bn, admin: bnAdmin, portal: bnPortal },
-  en: { ...en, admin: enAdmin, portal: enPortal },
+  bn: {
+    ...bn,
+    admin: bnAdmin,
+    portal: {
+      ...bnPortal,
+      attendance: bnPortalAttendance,
+      leave: bnPortalLeave,
+      payroll: bnPortalPayroll,
+      settings: bnPortalSettings,
+    },
+  },
+  en: {
+    ...en,
+    admin: enAdmin,
+    portal: {
+      ...enPortal,
+      attendance: enPortalAttendance,
+      leave: enPortalLeave,
+      payroll: enPortalPayroll,
+      settings: enPortalSettings,
+    },
+  },
 }
 
 function resolve(dict: Record<string, Dict> | unknown, path: string[]): unknown {

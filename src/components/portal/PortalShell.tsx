@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { Briefcase, Clock, LayoutDashboard, LayoutGrid, LogOut, MapPin, Menu, Network, Users, X } from "lucide-react"
+import { Briefcase, Clock, LayoutDashboard, LayoutGrid, LogOut, MapPin, Menu, Network, Settings, Users, X } from "lucide-react"
 import { useSessionStore } from "@/store/session"
 import { useI18n } from "@/lib/i18n"
 import { FEATURES, FEATURE_MAP, planFor, type FeatureDef } from "@/lib/features"
@@ -32,8 +32,17 @@ import { HrCrudView } from "./hr-crud-view"
 import { ModulesView } from "./modules-view"
 import { ModulePlaceholderView } from "./module-placeholder-view"
 import { SetupWizard } from "./setup-wizard"
+import AttendanceModuleDefault from "./attendance/AttendanceModule"
+import LeaveModuleDefault from "./leave/LeaveModule"
+import PayrollModuleDefault from "./payroll/PayrollModule"
+import OrgSettingsModuleDefault from "./settings/OrgSettingsModule"
 
-const CORE_ICONS = { LayoutDashboard, Users, Network, Briefcase, MapPin, Clock } as const
+const AttendanceModule = AttendanceModuleDefault
+const LeaveModule = LeaveModuleDefault
+const PayrollModule = PayrollModuleDefault
+const OrgSettingsModule = OrgSettingsModuleDefault
+
+const CORE_ICONS = { LayoutDashboard, Users, Network, Briefcase, MapPin, Clock, Settings } as const
 
 interface NavItem {
   key: PortalSection
@@ -135,6 +144,7 @@ function SidebarNav({ section, onNavigate }: { section: PortalSection; onNavigat
       { key: "designations", icon: Briefcase, label: t("portal.shell.designations") },
       { key: "branches", icon: MapPin, label: t("portal.shell.branches") },
       { key: "shifts", icon: Clock, label: t("portal.shell.shifts") },
+      { key: "settings", icon: Settings, label: t("portal.shell.settings") },
     ],
     [t],
   )
@@ -286,6 +296,8 @@ function SectionTitle({ section }: { section: PortalSection }) {
     title = t("portal.shell.branches")
   } else if (section === "shifts") {
     title = t("portal.shell.shifts")
+  } else if (section === "settings") {
+    title = t("portal.shell.settings")
   }
   return <>{title}</>
 }
@@ -318,6 +330,10 @@ export default function PortalShell() {
   const featureKey = section.startsWith("feature:") ? section.slice("feature:".length) : null
 
   const renderSection = () => {
+    // Real module views for built-in features
+    if (featureKey === "attendance") return <AttendanceModule />
+    if (featureKey === "leave") return <LeaveModule />
+    if (featureKey === "payroll") return <PayrollModule />
     if (featureKey) {
       if (FEATURE_MAP[featureKey]) return <ModulePlaceholderView featureKey={featureKey} />
       return <EmptyState title={t("common.error")} />
@@ -330,6 +346,8 @@ export default function PortalShell() {
       case "branches":
       case "shifts":
         return <HrCrudView resource={section} />
+      case "settings":
+        return <OrgSettingsModule />
       case "modules":
         return <ModulesView onNavigate={navigate} />
       default:
