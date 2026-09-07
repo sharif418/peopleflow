@@ -58,3 +58,14 @@ server.log
 /agent-ctx/
 /worklog-local*
 !.env.example
+
+# Sandbox / infrastructure artifacts — not part of the product repo
+/Caddyfile
+/.zscripts/
+/download/
+/examples/
+/mini-services/
+/tests/
+/upload/
+/tool-results/
+/prompts/

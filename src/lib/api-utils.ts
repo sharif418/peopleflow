@@ -25,12 +25,15 @@ export interface Guarded {
   org: Organization
 }
 
+/** Session context with a guaranteed non-null user. */
+export type AuthedContext = SessionContext & { user: NonNullable<SessionContext["user"]> }
+
 /** Requires an authenticated SUPER_ADMIN (impersonation NOT active). */
-export async function requireSuperAdmin(): Promise<SessionContext | NextResponse> {
+export async function requireSuperAdmin(): Promise<AuthedContext | NextResponse> {
   const ctx = await getSessionContext()
   if (!ctx.user) return fail("unauthenticated", 401)
   if (ctx.user.role !== "SUPER_ADMIN" || ctx.impersonating) return fail("forbidden", 403)
-  return ctx
+  return ctx as AuthedContext
 }
 
 /** Requires an org context (ORG_ADMIN or SUPER_ADMIN impersonating an org). */
