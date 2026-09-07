@@ -243,3 +243,28 @@ Stage Summary:
 - Phase 2 COMPLETE: Attendance (ZKTeco-style), Leave, Payroll (BD rules), Org Settings — all browser-verified
 - 69 files changed, +10,766 lines this phase; total platform now: 4 real modules + HR core + super admin panel
 - Remaining Phase 3 candidates: recruitment, performance, expense modules; ERPNext live sync; per-tenant site provisioning for real
+
+---
+Task ID: 3-a
+Agent: CTO (main agent)
+Task: Phase 3 — Engineering integrity fixes + App Router refactor + new module scaffolding
+
+Work Log:
+- Baseline QA via agent-browser: super admin + HR admin flows verified working (Phase 2 state)
+- Stage 1 (commit fbee1d4): removed `typescript.ignoreBuildErrors`, set `reactStrictMode: true`; fixed 5 hidden TS errors via new `AuthedContext` type in api-utils; untracked sandbox artifacts (Caddyfile, .zscripts/, download/, examples/, mini-services/, tests/) from repo; tsconfig/eslint exclude sandbox dirs
+- Stage 2 (commit 3da2fa3): full routing refactor from Zustand SPA to Next.js App Router:
+  - `/` landing w/ server-side auth redirect; `/login` page
+  - `/admin/*` layout guard (SUPER_ADMIN, non-impersonating) + 5 pages (overview, organizations, plans, health, audit)
+  - `/portal/[orgId]/*` layout guard (org context match, canonical subdomain URLs like /portal/akash) + 8 static pages + `[feature]` dynamic module route (real modules: attendance/leave/payroll; locked view for disabled flags; 404 unknown)
+  - loading.tsx + error.tsx boundaries for admin/portal, root not-found.tsx
+  - AdminChrome/PortalChrome + Link-based sidebars; session store cleaned (no SPA view state); admin-ui store for org-detail dialog; useLogout hook; impersonation round-trip routing
+  - E2E verified with agent-browser: login both roles, module routes, impersonation enter/exit, locked feature view, mobile sheet closes on nav
+- Stage 3 scaffolding: Prisma models added for Recruitment (JobPosting/JobApplication/Interview), Performance (Goal/Appraisal/AppraisalItem), Expenses (ExpenseClaim/ExpenseItem) — schema pushed, client regenerated
+- Feature keys recruitment/performance/expense already exist in features.ts (Growth plan includes them)
+
+Stage Summary:
+- Repo state: clean engineering baseline — tsc --noEmit passes, lint 0 errors, reactStrictMode on, no sandbox artifacts
+- Routing: proper App Router with server-side guards, layouts, loading/error boundaries, canonical org URLs
+- New module schemas ready for agents: type-safe Prisma models with BD context (BDT amounts, Bengali labels, BD phone formats)
+- NEXT: 3 parallel module builds (recruitment/performance/expenses) by subagents → integration by CTO → component splitting (PayrollModule 753 lines etc.) → styling polish → final QA
+- Integration checklist for CTO after agents finish: i18n index.ts dict registration, [feature]/page.tsx MODULES registry, seed execution, tsc/lint, browser QA

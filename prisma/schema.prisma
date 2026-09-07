@@ -60,6 +60,12 @@ model Organization {
   payslips      Payslip[]
   invoices      Invoice[]
   auditLogs     AuditLog[]
+  jobPostings   JobPosting[]
+  jobApplications JobApplication[]
+  interviews    Interview[]
+  goals         Goal[]
+  appraisals    Appraisal[]
+  expenseClaims ExpenseClaim[]
 }
 
 model FeatureFlag {
@@ -81,6 +87,7 @@ model Department {
   createdAt      DateTime @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   employees      Employee[]
+  jobPostings    JobPosting[]
 
   @@unique([organizationId, name])
 }
@@ -92,6 +99,7 @@ model Designation {
   createdAt      DateTime @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   employees      Employee[]
+  jobPostings    JobPosting[]
 
   @@unique([organizationId, name])
 }
@@ -151,6 +159,9 @@ model Employee {
   attendanceLogs AttendanceLog[]
   leaveRequests  LeaveRequest[]
   payslips       Payslip[]
+  goals          Goal[]
+  appraisals     Appraisal[]
+  expenseClaims  ExpenseClaim[]
 
   @@unique([organizationId, employeeCode])
 }
@@ -319,6 +330,156 @@ model Invoice {
   period         String // YYYY-MM
   createdAt      DateTime @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ─── Recruitment (job postings, applications, interview pipeline) ────────────
+
+model JobPosting {
+  id             String   @id @default(cuid())
+  organizationId String
+  title          String
+  departmentId   String?
+  designationId  String?
+  employmentType String   @default("full_time") // full_time | part_time | contract | intern
+  vacancies      Int      @default(1)
+  status         String   @default("open") // open | on_hold | closed
+  description    String?
+  postedAt       DateTime @default(now())
+  closesAt       DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  designation  Designation? @relation(fields: [designationId], references: [id], onDelete: SetNull)
+  applications JobApplication[]
+
+  @@index([organizationId, status])
+}
+
+model JobApplication {
+  id             String   @id @default(cuid())
+  organizationId String
+  jobPostingId   String
+  candidateName  String
+  candidateEmail String?
+  candidatePhone String?
+  expectedSalary Int? // BDT/month
+  coverNote      String?
+  stage          String   @default("applied") // applied | screening | interview | offer | hired | rejected
+  rating         Int      @default(0) // 0..5 quick rating
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jobPosting   JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+  interviews   Interview[]
+
+  @@index([organizationId, stage])
+}
+
+model Interview {
+  id             String   @id @default(cuid())
+  organizationId String
+  applicationId  String
+  round          Int      @default(1)
+  mode           String   @default("onsite") // onsite | phone | video
+  scheduledAt    DateTime
+  interviewer    String? // employee name or external
+  feedback       String?
+  result         String   @default("pending") // pending | pass | fail
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  application  JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, round])
+}
+
+// ─── Performance (goals & appraisals) ──────────────────────────────────────
+
+model Goal {
+  id             String   @id @default(cuid())
+  organizationId String
+  employeeId     String
+  title          String
+  description    String?
+  unit           String   @default("") // "%", "টাকা", "ইউনিট" …
+  targetValue    Float    @default(0)
+  currentValue   Float    @default(0)
+  startDate      String   // YYYY-MM-DD
+  dueDate        String   // YYYY-MM-DD
+  weight         Int      @default(1) // relative weight 1..5
+  status         String   @default("active") // active | completed | overdue | cancelled
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+}
+
+model Appraisal {
+  id             String   @id @default(cuid())
+  organizationId String
+  employeeId     String
+  period         String // e.g. "2026-H1"
+  overallScore   Float    @default(0) // 1..5 average of items
+  status         String   @default("draft") // draft | in_review | final
+  reviewerNote   String?
+  selfNote       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  items        AppraisalItem[]
+
+  @@unique([employeeId, period])
+}
+
+model AppraisalItem {
+  id             String   @id @default(cuid())
+  appraisalId    String
+  criterion      String // quality | punctuality | teamwork | leadership | goal_achievement
+  score          Int      @default(3) // 1..5
+  comment        String?
+  appraisal      Appraisal @relation(fields: [appraisalId], references: [id], onDelete: Cascade)
+}
+
+// ─── Expense claims (approval workflow, BDT) ─────────────────────────────
+
+model ExpenseClaim {
+  id             String   @id @default(cuid())
+  organizationId String
+  employeeId     String
+  title          String
+  category       String   @default("other") // travel | food | office_supplies | client_entertainment | utilities | training | other
+  expenseDate    String   // YYYY-MM-DD
+  totalAmount    Int      @default(0) // BDT
+  status         String   @default("submitted") // submitted | approved | rejected | paid
+  description    String?
+  reviewerNote   String?
+  reviewedAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  items        ExpenseItem[]
+
+  @@index([organizationId, status])
+}
+
+model ExpenseItem {
+  id             String   @id @default(cuid())
+  claimId        String
+  label          String
+  amount         Int      @default(0) // BDT
+  note           String?
+  claim          ExpenseClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
 }
 
 model AuditLog {
