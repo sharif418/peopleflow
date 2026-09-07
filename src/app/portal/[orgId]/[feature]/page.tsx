@@ -17,6 +17,9 @@ import { PageHeader } from "@/components/shared/page-header"
 import AttendanceModule from "@/components/portal/attendance/AttendanceModule"
 import LeaveModule from "@/components/portal/leave/LeaveModule"
 import PayrollModule from "@/components/portal/payroll/PayrollModule"
+import RecruitmentModule from "@/components/portal/recruitment/RecruitmentModule"
+import PerformanceModule from "@/components/portal/performance/PerformanceModule"
+import ExpenseModule from "@/components/portal/expenses/ExpenseModule"
 import { ModulePlaceholderView } from "@/components/portal/module-placeholder-view"
 
 /** Real, implemented module components keyed by feature key. */
@@ -24,6 +27,9 @@ const MODULES: Record<string, React.ComponentType> = {
   attendance: AttendanceModule,
   leave: LeaveModule,
   payroll: PayrollModule,
+  recruitment: RecruitmentModule,
+  performance: PerformanceModule,
+  expense: ExpenseModule,
 }
 
 function FeatureLockedView({ featureKey }: { featureKey: string }) {

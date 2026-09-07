@@ -14,6 +14,12 @@ import { bnPortalPayroll } from "./bn-portal-payroll"
 import { enPortalPayroll } from "./en-portal-payroll"
 import { bnPortalSettings } from "./bn-portal-settings"
 import { enPortalSettings } from "./en-portal-settings"
+import { bnPortalRecruitment } from "./bn-portal-recruitment"
+import { enPortalRecruitment } from "./en-portal-recruitment"
+import { bnPortalPerformance } from "./bn-portal-performance"
+import { enPortalPerformance } from "./en-portal-performance"
+import { bnPortalExpense } from "./bn-portal-expense"
+import { enPortalExpense } from "./en-portal-expense"
 import { useSessionStore } from "@/store/session"
 import type { Lang } from "@/lib/types"
 
@@ -29,6 +35,9 @@ const dictionaries: Record<Lang, Record<string, Dict>> = {
       leave: bnPortalLeave,
       payroll: bnPortalPayroll,
       settings: bnPortalSettings,
+      recruitment: bnPortalRecruitment,
+      performance: bnPortalPerformance,
+      expense: bnPortalExpense,
     },
   },
   en: {
@@ -40,6 +49,9 @@ const dictionaries: Record<Lang, Record<string, Dict>> = {
       leave: enPortalLeave,
       payroll: enPortalPayroll,
       settings: enPortalSettings,
+      recruitment: enPortalRecruitment,
+      performance: enPortalPerformance,
+      expense: enPortalExpense,
     },
   },
 }
