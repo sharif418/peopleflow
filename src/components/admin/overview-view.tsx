@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatCard } from "@/components/shared/stat-card"
 import { EmptyState } from "@/components/shared/empty-state"
+import { useAdminUiStore } from "@/store/admin-ui"
 import { apiFetch } from "@/lib/fetcher"
 import { useI18n } from "@/lib/i18n"
 import { formatBdt, formatDateTime, formatNumber, toBnDigits } from "@/lib/format"
@@ -96,7 +97,8 @@ function ChartCardSkeleton() {
   )
 }
 
-export function OverviewView({ onOpenOrg }: { onOpenOrg: (orgId: string) => void }) {
+export function OverviewView() {
+  const openOrg = useAdminUiStore((s) => s.openOrg)
   const { t, lang } = useI18n()
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["admin", "stats"],
@@ -293,7 +295,7 @@ export function OverviewView({ onOpenOrg }: { onOpenOrg: (orgId: string) => void
                     <TableRow
                       key={org.id}
                       className="cursor-pointer"
-                      onClick={() => onOpenOrg(org.id)}
+                      onClick={() => openOrg(org.id)}
                     >
                       <TableCell className="max-w-40 truncate pl-6 font-medium" title={org.name}>
                         {org.name}

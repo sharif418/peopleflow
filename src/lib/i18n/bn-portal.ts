@@ -1,5 +1,11 @@
 // Organization Portal namespace — Bengali (owned by Task 2-b agent)
 export const bnPortal = {
+  feature: {
+    lockedTitle: "এই মডিউলটি আপনার প্ল্যানে নেই",
+    lockedDesc: "এই মডিউলটি ব্যবহার করতে প্ল্যান আপগ্রেড করুন",
+    lockedBody: "{org} প্রতিষ্ঠানের বর্তমান প্ল্যানে এই মডিউল চালু নেই। মডিউলস পাতা থেকে প্ল্যান আপগ্রেড করতে পারবেন।",
+    goModules: "মডিউলস দেখুন",
+  },
   common: {
     save: "সেভ করুন",
     saving: "সেভ হচ্ছে...",

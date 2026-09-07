@@ -5,6 +5,8 @@ import { toast } from "sonner"
 import { Check, LayoutGrid, Lock, Sparkles, Unlock } from "lucide-react"
 import { useSessionStore } from "@/store/session"
 import { useI18n } from "@/lib/i18n"
+import { useRouter } from "next/navigation"
+import { portalPath } from "@/lib/nav"
 import { FEATURES, FEATURE_CATEGORY_LABELS, PLANS, planFor, type FeatureDef } from "@/lib/features"
 import { formatBdt, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -131,9 +133,12 @@ function UpgradeDialog({
   )
 }
 
-export function ModulesView({ onNavigate }: { onNavigate: (s: PortalSection) => void }) {
+export function ModulesView() {
   const { org } = useSessionStore()
   const { lang, t } = useI18n()
+  const router = useRouter()
+  const orgKey = org?.subdomain || org?.id || ""
+  const navigate = (s: PortalSection) => router.push(portalPath(orgKey, s))
   const [upgradeFeature, setUpgradeFeature] = useState<FeatureDef | null>(null)
 
   const flags = org?.featureFlags ?? {}
@@ -157,7 +162,7 @@ export function ModulesView({ onNavigate }: { onNavigate: (s: PortalSection) => 
               key={f.key}
               type="button"
               onClick={() => {
-                if (enabled) onNavigate(`feature:${f.key}`)
+                if (enabled) navigate(`feature:${f.key}`)
                 else setUpgradeFeature(f)
               }}
               aria-label={name}

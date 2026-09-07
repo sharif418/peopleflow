@@ -1,10 +1,8 @@
 "use client"
 
-// Global client state: session + language + SPA view
+// Global client state: session + language (navigation is handled by the App Router)
 import { create } from "zustand"
 import type { Lang, MeResponse, SessionOrg, SessionUser } from "@/lib/types"
-
-export type View = "landing" | "login" | "app"
 
 interface SessionState {
   status: "loading" | "authenticated" | "unauthenticated"
@@ -13,11 +11,9 @@ interface SessionState {
   impersonating: boolean
   lang: Lang
   langHydrated: boolean
-  view: View
 
   setLang: (lang: Lang) => void
   hydrateLang: () => void
-  setView: (view: View) => void
   setSession: (user: SessionUser, org: SessionOrg | null, impersonating: boolean) => void
   clearSession: () => void
   refresh: () => Promise<void>
@@ -33,7 +29,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   impersonating: false,
   lang: "bn",
   langHydrated: false,
-  view: "landing",
 
   setLang: (lang) => {
     set({ lang })
@@ -61,13 +56,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ langHydrated: true })
   },
 
-  setView: (view) => set({ view }),
-
   setSession: (user, org, impersonating) =>
     set({ status: "authenticated", user, org, impersonating }),
 
   clearSession: () =>
-    set({ status: "unauthenticated", user: null, org: null, impersonating: false, view: "landing" }),
+    set({ status: "unauthenticated", user: null, org: null, impersonating: false }),
 
   refresh: async () => {
     try {

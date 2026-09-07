@@ -6,10 +6,12 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { useSessionStore } from "@/store/session"
 import { useI18n } from "@/lib/i18n"
+import { useRouter } from "next/navigation"
 
 export function ImpersonationBanner() {
   const { org, impersonating, refresh } = useSessionStore()
   const { t } = useI18n()
+  const router = useRouter()
   const [busy, setBusy] = useState(false)
 
   if (!impersonating || !org) return null
@@ -22,6 +24,8 @@ export function ImpersonationBanner() {
       if (json.ok) {
         await refresh()
         toast.success(t("auth.impersonationExit") + " ✓")
+        router.push("/admin")
+        router.refresh()
       } else {
         toast.error(t("common.error"))
       }

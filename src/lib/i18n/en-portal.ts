@@ -1,5 +1,11 @@
 // Organization Portal namespace — English (owned by Task 2-b agent)
 export const enPortal = {
+  feature: {
+    lockedTitle: "This module is not in your plan",
+    lockedDesc: "Upgrade your plan to use this module",
+    lockedBody: "The current plan for {org} does not include this module. You can upgrade from the Modules page.",
+    goModules: "View modules",
+  },
   common: {
     save: "Save",
     saving: "Saving...",

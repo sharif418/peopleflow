@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
+import Link from "next/link"
 import { ArrowLeft, Building2, KeyRound, Loader2, LogIn, Mail, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -12,6 +13,8 @@ import { PeopleFlowLogo } from "@/components/shared/peopleflow-logo"
 import { LangToggle } from "@/components/shared/lang-toggle"
 import { ThemeToggle } from "@/components/shared/theme-toggle"
 import { useI18n } from "@/lib/i18n"
+import { useRouter } from "next/navigation"
+import { homePathFor } from "@/lib/nav"
 import { useSessionStore } from "@/store/session"
 import type { SessionOrg, SessionUser } from "@/lib/types"
 
@@ -20,8 +23,9 @@ const DEMO_ACCOUNTS = [
   { email: "admin@akash.com", password: "admin123", key: "hr", icon: Building2 },
 ]
 
-export function LoginView({ onBack }: { onBack: () => void }) {
+export function LoginView() {
   const { t } = useI18n()
+  const router = useRouter()
   const setSession = useSessionStore((s) => s.setSession)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -46,6 +50,8 @@ export function LoginView({ onBack }: { onBack: () => void }) {
       if (json.ok && json.data) {
         setSession(json.data.user, json.data.org, json.data.impersonating)
         toast.success(t("auth.loginTitle") + " ✓")
+        router.push(homePathFor(json.data.user, json.data.org, json.data.impersonating))
+        router.refresh()
       } else {
         setError(json.error === "invalid credentials" ? t("auth.invalidCredentials") : t("common.error"))
       }
@@ -59,9 +65,11 @@ export function LoginView({ onBack }: { onBack: () => void }) {
   return (
     <div className="grain-bg flex min-h-screen flex-col bg-background">
       <header className="flex h-14 items-center justify-between px-4 sm:h-16 sm:px-6">
-        <Button variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" aria-hidden />
-          <span className="hidden sm:inline">{t("auth.backToHome")}</span>
+        <Button variant="ghost" size="sm" className="gap-1.5 px-2 text-muted-foreground" asChild>
+          <Link href="/">
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            <span className="hidden sm:inline">{t("auth.backToHome")}</span>
+          </Link>
         </Button>
         <div className="flex items-center gap-2">
           <LangToggle />

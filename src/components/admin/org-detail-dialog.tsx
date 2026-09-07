@@ -34,6 +34,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { apiFetch } from "@/lib/fetcher"
 import { useI18n } from "@/lib/i18n"
+import { useRouter } from "next/navigation"
 import { useSessionStore } from "@/store/session"
 import { formatBdt, formatDate, formatNumber } from "@/lib/format"
 import { FEATURE_CATEGORY_LABELS, FEATURES, PLANS, PLAN_MAP } from "@/lib/features"
@@ -72,6 +73,7 @@ export function OrgDetailDialog({
   orgId: string
   onClose: () => void
 }) {
+  const router = useRouter()
   const { t, lang } = useI18n()
   const queryClient = useQueryClient()
   const [confirmAction, setConfirmAction] = useState<"plan" | "suspend" | "activate" | "delete" | null>(null)
@@ -166,7 +168,10 @@ export function OrgDetailDialog({
         body: JSON.stringify({ orgId }),
       })
       await useSessionStore.getState().refresh()
-      // SPA shell switches to the org portal automatically
+      // Route into the impersonated org's portal
+      const orgCtx = useSessionStore.getState().org
+      const key = orgCtx?.subdomain || orgCtx?.id || orgId
+      router.push(`/portal/${key}`)
     } catch (err) {
       toast.error(t("admin.orgDetail.impersonateFailed"), {
         description: err instanceof Error ? err.message : undefined,

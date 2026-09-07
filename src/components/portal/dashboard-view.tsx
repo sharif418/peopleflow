@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query"
 import { Banknote, CalendarCheck2, CalendarOff, Fingerprint, UserPlus, Users, UserRoundX, UsersRound, ArrowRight, CheckCheck } from "lucide-react"
 import { useSessionStore } from "@/store/session"
 import { useI18n } from "@/lib/i18n"
+import { useRouter } from "next/navigation"
+import { portalPath } from "@/lib/nav"
 import { apiFetch } from "@/lib/fetcher"
 import { formatBdt, formatDate, formatNumber, initialsOf, toBnDigits } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -41,9 +43,12 @@ function shortDate(date: string, lang: "bn" | "en"): string {
   return lang === "bn" ? toBnDigits(s) : s
 }
 
-export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) => void }) {
+export function DashboardView() {
   const { lang, t } = useI18n()
   const { org } = useSessionStore()
+  const router = useRouter()
+  const orgKey = org?.subdomain || org?.id || ""
+  const navigate = (s: PortalSection) => router.push(portalPath(orgKey, s))
   const flags = org?.featureFlags ?? {}
   const { data, isPending, isError, refetch } = useQuery({
     queryKey: orgKeys.overview,
@@ -140,7 +145,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
       {leaveEnabled && pendingLeave > 0 && (
         <button
           type="button"
-          onClick={() => onNavigate(featureSection("leave"))}
+          onClick={() => navigate(featureSection("leave"))}
           className="group flex w-full items-center gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-left transition-all hover:border-warning/50 hover:bg-warning/15"
           aria-label={t("portal.dash.pendingLeaveAlert")}
         >
@@ -300,7 +305,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
                 <Button
                   variant="outline"
                   className="h-auto w-full justify-start gap-3 py-3"
-                  onClick={() => onNavigate(featureSection("attendance"))}
+                  onClick={() => navigate(featureSection("attendance"))}
                 >
                   <Fingerprint className="size-5 shrink-0 text-primary" aria-hidden />
                   <span className="text-left">
@@ -313,7 +318,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
                 <Button
                   variant="outline"
                   className="h-auto w-full justify-start gap-3 py-3"
-                  onClick={() => onNavigate(featureSection("leave"))}
+                  onClick={() => navigate(featureSection("leave"))}
                 >
                   <CalendarOff className="size-5 shrink-0 text-primary" aria-hidden />
                   <span className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left">
@@ -329,7 +334,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
                   </span>
                 </Button>
               )}
-              <Button className="h-auto w-full justify-start gap-3 py-3" onClick={() => onNavigate("employees")}>
+              <Button className="h-auto w-full justify-start gap-3 py-3" onClick={() => navigate("employees")}>
                 <UserPlus className="size-5 shrink-0" aria-hidden />
                 <span className="text-left">
                   <span className="block text-sm font-semibold">{t("portal.dash.addEmployee")}</span>
@@ -339,7 +344,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
               <Button
                 variant="outline"
                 className="h-auto w-full justify-start gap-3 py-3"
-                onClick={() => onNavigate("modules")}
+                onClick={() => navigate("modules")}
               >
                 <ArrowRight className="size-5 shrink-0" aria-hidden />
                 <span className="text-left">
@@ -406,7 +411,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
             <Button
               variant="outline"
               className="h-auto w-full justify-start gap-3 py-3"
-              onClick={() => onNavigate("employees")}
+              onClick={() => navigate("employees")}
             >
               <Users className="size-5 shrink-0" aria-hidden />
               <span className="text-left">
@@ -417,7 +422,7 @@ export function DashboardView({ onNavigate }: { onNavigate: (s: PortalSection) =
             <Button
               variant="outline"
               className="h-auto w-full justify-start gap-3 py-3"
-              onClick={() => onNavigate("shifts")}
+              onClick={() => navigate("shifts")}
             >
               <CheckCheck className="size-5 shrink-0" aria-hidden />
               <span className="text-left">

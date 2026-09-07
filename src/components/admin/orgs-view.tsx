@@ -25,6 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent } from "@/components/ui/card"
 import { PageHeader } from "@/components/shared/page-header"
 import { EmptyState } from "@/components/shared/empty-state"
+import { useAdminUiStore } from "@/store/admin-ui"
 import { apiFetch } from "@/lib/fetcher"
 import { useI18n } from "@/lib/i18n"
 import { formatBdt, formatDate, formatNumber } from "@/lib/format"
@@ -43,7 +44,8 @@ function useDebounced<T>(value: T, delay = 300): T {
 
 const STATUS_VALUES = ["", "active", "suspended", "provisioning"] as const
 
-export function OrgsView({ onOpenDetail }: { onOpenDetail: (orgId: string) => void }) {
+export function OrgsView() {
+  const openOrg = useAdminUiStore((s) => s.openOrg)
   const { t, lang } = useI18n()
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState<(typeof STATUS_VALUES)[number]>("")
@@ -117,7 +119,7 @@ export function OrgsView({ onOpenDetail }: { onOpenDetail: (orgId: string) => vo
             variant="ghost"
             size="sm"
             className="h-8 gap-1.5 px-2"
-            onClick={() => onOpenDetail(row.original.id)}
+            onClick={() => openOrg(row.original.id)}
             aria-label={`${t("admin.orgs.viewOrg")} ${row.original.name}`}
           >
             <Eye className="h-4 w-4" aria-hidden />
@@ -126,7 +128,7 @@ export function OrgsView({ onOpenDetail }: { onOpenDetail: (orgId: string) => vo
         ),
       }),
     ],
-    [t, lang, columnHelper, onOpenDetail],
+    [t, lang, columnHelper, openOrg],
   )
 
   // TanStack Table instance is required by spec — its function-returning API is
@@ -242,7 +244,7 @@ export function OrgsView({ onOpenDetail }: { onOpenDetail: (orgId: string) => vo
                     <TableRow
                       key={row.id}
                       className="cursor-pointer"
-                      onClick={() => onOpenDetail(row.original.id)}
+                      onClick={() => openOrg(row.original.id)}
                     >
                       {row.getVisibleCells().map((cell) => (
                         <TableCell key={cell.id} className="py-3">
@@ -261,7 +263,7 @@ export function OrgsView({ onOpenDetail }: { onOpenDetail: (orgId: string) => vo
       <CreateOrgDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        onCreated={(orgId) => onOpenDetail(orgId)}
+        onCreated={(orgId) => openOrg(orgId)}
       />
     </div>
   )

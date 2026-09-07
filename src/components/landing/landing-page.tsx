@@ -24,6 +24,7 @@ import { LangToggle } from "@/components/shared/lang-toggle"
 import { ThemeToggle } from "@/components/shared/theme-toggle"
 import { AppFooter } from "@/components/shared/app-footer"
 import { useI18n } from "@/lib/i18n"
+import { useRouter } from "next/navigation"
 import { FEATURES, PLANS } from "@/lib/features"
 import { formatBdt, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -148,7 +149,26 @@ function HeroMock() {
 
 // ─── Landing page ────────────────────────────────────────────────────────────
 
-export function LandingPage({ onLogin }: { onLogin: () => void }) {
+/** Login CTA button — routes to /login (keeps the landing page a pure component). */
+function LoginButton({
+  size,
+  className,
+  children,
+}: {
+  size?: "sm" | "lg" | "default"
+  className?: string
+  children?: React.ReactNode
+}) {
+  const router = useRouter()
+  const { t } = useI18n()
+  return (
+    <Button size={size} className={className} onClick={() => router.push("/login")}>
+      {children ?? t("landing.navLogin")}
+    </Button>
+  )
+}
+
+export function LandingPage() {
   const { t, lang } = useI18n()
 
   const stats = [
@@ -184,10 +204,10 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
           <div className="flex items-center gap-2">
             <LangToggle className="hidden sm:inline-flex" />
             <ThemeToggle />
-            <Button size="sm" className="h-9 rounded-full px-4" onClick={onLogin}>
+            <LoginButton size="sm" className="h-9 rounded-full px-4">
               {t("landing.navLogin")}
               <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden />
-            </Button>
+            </LoginButton>
           </div>
         </div>
       </header>
@@ -217,15 +237,14 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               </p>
 
               <div className="flex w-full flex-col gap-2.5 sm:w-auto sm:flex-row">
-                <Button size="lg" className="h-11 rounded-full px-6 text-sm" onClick={onLogin}>
+                <LoginButton size="lg" className="h-11 rounded-full px-6 text-sm">
                   {t("landing.heroCtaPrimary")}
                   <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden />
-                </Button>
+                </LoginButton>
                 <Button
                   size="lg"
                   variant="outline"
                   className="h-11 rounded-full px-6 text-sm"
-                  onClick={onLogin}
                 >
                   {t("landing.heroCtaSecondary")}
                 </Button>
@@ -404,7 +423,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
                   <Button
                     className="mt-6 w-full rounded-full"
                     variant={p.highlight ? "default" : "outline"}
-                    onClick={onLogin}
+                    
                   >
                     {t("landing.pricingCta")}
                   </Button>
@@ -426,7 +445,7 @@ export function LandingPage({ onLogin }: { onLogin: () => void }) {
               size="lg"
               variant="secondary"
               className="mt-6 h-11 rounded-full bg-background px-7 text-foreground hover:bg-background/90"
-              onClick={onLogin}
+              
             >
               {t("landing.ctaButton")}
               <ArrowRight className="ml-1.5 h-4 w-4" aria-hidden />
