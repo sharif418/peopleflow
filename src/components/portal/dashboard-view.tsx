@@ -1,7 +1,7 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import { Banknote, CalendarCheck2, CalendarOff, Fingerprint, UserPlus, Users, UserRoundX, UsersRound, ArrowRight, CheckCheck } from "lucide-react"
+import { Banknote, Briefcase, CalendarCheck2, CalendarOff, Fingerprint, Target, UserPlus, Users, UserRoundX, UsersRound, ArrowRight, CheckCheck } from "lucide-react"
 import { useSessionStore } from "@/store/session"
 import { useI18n } from "@/lib/i18n"
 import { useRouter } from "next/navigation"
@@ -114,6 +114,9 @@ export function DashboardView() {
   const pendingLeave = data.pendingLeaveRequests ?? 0
   const attendanceEnabled = !!flags.attendance
   const leaveEnabled = !!flags.leave
+  const recruitmentEnabled = !!flags.recruitment
+  const expenseEnabled = !!flags.expense
+  const performanceEnabled = !!flags.performance
 
   return (
     <div className="space-y-6">
@@ -356,6 +359,123 @@ export function DashboardView() {
           </Card>
         </div>
       </div>
+
+      {/* Module activity — new Phase 3 modules */}
+      {(recruitmentEnabled || expenseEnabled || performanceEnabled) && data.modules && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {recruitmentEnabled && (
+            <Card className="group border-border/80 shadow-xs transition-shadow hover:shadow-md">
+              <CardContent className="flex flex-col gap-3 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex size-9 items-center justify-center rounded-xl bg-chart-1/12 text-chart-1">
+                      <Briefcase className="size-4.5" aria-hidden />
+                    </span>
+                    <p className="text-sm font-semibold">{t("portal.dash.modRecruitment")}</p>
+                  </div>
+                  <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">{t("portal.dash.modOpenJobs")}</span>
+                  <span className="font-semibold tabular-nums">{formatNumber(data.modules.recruitment.openJobs, lang)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">{t("portal.dash.modPipeline")}</span>
+                  <span className="font-semibold tabular-nums">{formatNumber(data.modules.recruitment.pipeline, lang)}</span>
+                </div>
+                {data.modules.recruitment.upcomingInterviews > 0 && (
+                  <Badge className="w-fit border-warning/40 bg-warning/15 text-warning-foreground">
+                    {t("portal.dash.modInterviews", { n: formatNumber(data.modules.recruitment.upcomingInterviews, lang) })}
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-auto w-full"
+                  onClick={() => navigate(featureSection("recruitment"))}
+                >
+                  {t("portal.dash.modOpen")}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+          {expenseEnabled && (
+            <Card className="group border-border/80 shadow-xs transition-shadow hover:shadow-md">
+              <CardContent className="flex flex-col gap-3 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex size-9 items-center justify-center rounded-xl bg-chart-2/12 text-chart-2">
+                      <Banknote className="size-4.5" aria-hidden />
+                    </span>
+                    <p className="text-sm font-semibold">{t("portal.dash.modExpenses")}</p>
+                  </div>
+                  <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">{t("portal.dash.modPendingClaims")}</span>
+                  <span className="font-semibold tabular-nums">{formatNumber(data.modules.expenses.pendingClaims, lang)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">{t("portal.dash.modPendingAmount")}</span>
+                  <span className="font-semibold tabular-nums">{formatBdt(data.modules.expenses.pendingAmount, lang)}</span>
+                </div>
+                {data.modules.expenses.pendingClaims > 0 && (
+                  <Badge className="w-fit border-warning/40 bg-warning/15 text-warning-foreground">
+                    {t("portal.dash.modNeedsReview")}
+                  </Badge>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-auto w-full"
+                  onClick={() => navigate(featureSection("expense"))}
+                >
+                  {t("portal.dash.modOpen")}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+          {performanceEnabled && (
+            <Card className="group border-border/80 shadow-xs transition-shadow hover:shadow-md">
+              <CardContent className="flex flex-col gap-3 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex size-9 items-center justify-center rounded-xl bg-chart-3/12 text-chart-3">
+                      <Target className="size-4.5" aria-hidden />
+                    </span>
+                    <p className="text-sm font-semibold">{t("portal.dash.modPerformance")}</p>
+                  </div>
+                  <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">{t("portal.dash.modActiveGoals")}</span>
+                  <span className="font-semibold tabular-nums">{formatNumber(data.modules.performance.activeGoals, lang)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">{t("portal.dash.modAvgProgress")}</span>
+                  <span className="font-semibold tabular-nums">
+                    {formatNumber(data.modules.performance.avgProgress, lang)}%
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-chart-3 transition-all"
+                    style={{ width: `${Math.min(100, data.modules.performance.avgProgress)}%` }}
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-auto w-full"
+                  onClick={() => navigate(featureSection("performance"))}
+                >
+                  {t("portal.dash.modOpen")}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Recent hires */}
       <div className="grid gap-4 lg:grid-cols-3">

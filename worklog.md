@@ -331,3 +331,27 @@ Stage Summary:
 - Components: RecruitmentModule (default export, ready for MODULES.recruitment wiring) + 13 subcomponents in components/portal/recruitment/, mobile-first, emerald/amber/violet/teal/rose stage palette (no indigo/blue), dark-mode semantic tokens, skeletons + EmptyState + retry, sonner toasts, pf-scrollbar on long lists, min-h-10 touch targets
 - Files created: 16 (8 API, 2 i18n, 1 seed) + 13 UI files, all in owned paths only — shared files untouched
 - CTO integration checklist: i18n index.ts dict registration (recruitment key under portal), [feature]/page.tsx MODULES.recruitment = RecruitmentModule, seed already executed (5 jobs/12 apps/4 interviews for akash), invalidate ["org","recruitment"] on related mutations (done internally)
+
+---
+Task ID: 3-refactor
+Agent: Component splitting refactorer
+Task: Split 500+ line components into focused files
+
+Work Log:
+- Pure structural pass, ZERO behavior change: all state/queries/mutations stayed in shells; extracted components are presentational with verbatim JSX (same classes, i18n keys, ARIA, handlers); Radix tab unmount semantics preserved by keeping filter state in shells
+- PayrollModule.tsx 753 → 287 shell + payroll-overview.tsx 97 (NoteStatCard + stat grid), payslips-tab.tsx 225 (period jumps + status chips/search toolbar + list states + pagination), payslip-card.tsx 90, structures-tab.tsx 71, structure-card.tsx 99, run-payroll-dialog.tsx 91 (generate AlertDialog); STATUS_FILTERS/statusFilterLabel moved to payslips-tab, currentPeriodLocal stays in shell
+- payslip-detail-dialog.tsx 360 → 187 + payslip-document.tsx 189 (DocRow/Stamp/fields/org header/earnings/deductions/totals/PF footer moved wholesale; dialog keeps query/mutation/actions/confirm)
+- structure-form-dialog.tsx 301 → 179 + structure-rows-editor.tsx 138 (rows grid + percentSum badge + add button; percentSum memo moved with it)
+- setup-wizard.tsx 678 → 214 + wizard/ folder: types.ts 13 (ShiftRow/EmpRow), chips-step.tsx 86, step-indicator.tsx 60 (STEP_ICONS/stepMeta moved in), success-screen.tsx 33, steps/{welcome 59, departments 32, designations 32, shifts 101, employees 137, review 65}-step.tsx; shell keeps validateStep/goNext/submitMutation/footer nav; SetupWizard named export unchanged at same path
+- employee-form-dialog.tsx 588 → 173 + employee-form/ folder: schema.ts 77 (zod + FormValues + EMPTY), relation-select.tsx 55, personal-info-fields.tsx 109 (names + code/phone/email), job-details-fields.tsx 143 (gender/date/salary + type/status), assignment-fields.tsx 117 (dept/designation/branch/shift)
+- org-detail-dialog.tsx 563 → 320 + org-detail-info-card.tsx 91 (InfoRow), org-detail-features-tab.tsx 84 (CATEGORY_ORDER), org-detail-plan-tab.tsx 77, org-detail-danger-tab.tsx 76, org-detail-confirm-dialogs.tsx 76; useRouter impersonation logic + provisioning poll + optimistic toggleFeature intact in shell
+- OrgSettingsModule.tsx 506 → 71 + settings/ co-located: profile-card.tsx 127, workweek-card.tsx 108 (DAY_KEYS/dayLabel moved in), payroll-config-card.tsx 86, info-card.tsx 96 (InfoRow), save-footer.tsx 29, use-settings-save.ts 32 (shared PATCH mutation hook)
+- create-org-dialog.tsx 501 → 212 + create-org-schema.ts 29 (createSchema/STEP_FIELDS/slugify), create-org-step-indicator.tsx 51, create-org-info-step.tsx 96 (subdomain auto-slug via parent callbacks), create-org-plan-step.tsx 73, create-org-admin-step.tsx 113 (showPassword state kept in shell for cross-step parity), create-org-review-step.tsx 76
+- employees-view.tsx 487 → 233 + employees-filters.tsx 91 (STATUS_OPTIONS moved in), employees-table.tsx 87 (useReactTable instance), employees-pagination.tsx 61, employee-columns.tsx 139 (useEmployeeColumns hook, useCallback-stable edit/delete handlers keep the columns memo as stable as before)
+- Noted seams NOT split (cohesive as-is): PayrollModule shell 287 (period auto-jump + 3 queries + 2 mutations), org-detail-dialog shell 320 (impersonation + polling + confirm callbacks)
+- Verification: bunx tsc --noEmit → 0 errors repo-wide; bun run lint → 0 errors, 1 warning = the pre-existing TanStack useReactTable warning relocated verbatim from employees-view to employees-table (not new); dev.log clean (one transient module-not-found during a mid-edit typo window, fixed immediately); authed curl smoke admin@akash.com → /portal/akash/{payroll,employees,settings} all 200, super admin /admin/organizations 200, /login 200; git status confirms zero changes to do-not-touch paths (dashboard-view, src/app, prisma, src/lib, src/store, ui, leave/attendance/recruitment/performance/expenses); NO git commit
+
+Stage Summary:
+- 7 oversized files (4,076 lines) → 7 shells (max 320) + 36 new co-located files, all ≤ 250 lines except the two noted cohesive shells; public surface unchanged (same default/named exports at same paths — portal-chrome, [feature]/page MODULES registry, admin pages all import the same symbols)
+- tsc: 0 errors · lint: 0 errors + 1 known relocated warning · smoke: all affected routes 200
+- Files touched: 9 modified, 36 created, 0 deleted; work record also at agent-ctx/3-refactor-component-splitting.md

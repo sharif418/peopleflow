@@ -50,6 +50,11 @@ export interface OverviewData {
   headcountByDept: { name: string | null; count: number }[]
   salaryByDept?: { name: string | null; total: number }[]
   pendingLeaveRequests?: number
+  modules?: {
+    expenses: { pendingClaims: number; pendingAmount: number }
+    recruitment: { openJobs: number; pipeline: number; upcomingInterviews: number }
+    performance: { activeGoals: number; avgProgress: number }
+  }
   recentHires: {
     id: string
     employeeCode: string

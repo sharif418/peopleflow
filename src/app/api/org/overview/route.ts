@@ -19,14 +19,36 @@ function groupedToHeadcount(
   return out
 }
 
+/** Average progress (0–100) of active goals with a non-zero target. */
+function goalAvgProgress(goals: { targetValue: number; currentValue: number }[]): number {
+  const withTarget = goals.filter((g) => g.targetValue > 0)
+  if (withTarget.length === 0) return 0
+  const sum = withTarget.reduce((acc, g) => acc + Math.min(100, (g.currentValue / g.targetValue) * 100), 0)
+  return Math.round(sum / withTarget.length)
+}
+
 export async function GET() {
   const guard = await requireOrg()
   if (isResponse(guard)) return guard
   const orgId = guard.org.id
 
   try {
-    const [statusGroups, latestAttendance, payrollAgg, attendance14, deptGroups, recentHires, salaryByDeptRaw, pendingLeaveRaw] =
-      await Promise.all([
+    const [
+      statusGroups,
+      latestAttendance,
+      payrollAgg,
+      attendance14,
+      deptGroups,
+      recentHires,
+      salaryByDeptRaw,
+      pendingLeaveRaw,
+      pendingExpenseCount,
+      pendingExpenseAgg,
+      openJobsRaw,
+      pipelineRaw,
+      upcomingInterviewsRaw,
+      activeGoalsRaw,
+    ] = await Promise.all([
         db.employee.groupBy({ by: ["status"], _count: { _all: true }, where: { organizationId: orgId } }),
         db.attendanceDay.findFirst({ where: { organizationId: orgId }, orderBy: { date: "desc" } }),
         db.employee.aggregate({
@@ -65,6 +87,30 @@ export async function GET() {
         }),
         db.leaveRequest.count({
           where: { organizationId: orgId, status: "pending" },
+        }),
+        db.expenseClaim.count({
+          where: { organizationId: orgId, status: "submitted" },
+        }),
+        db.expenseClaim.aggregate({
+          _sum: { totalAmount: true },
+          where: { organizationId: orgId, status: "submitted" },
+        }),
+        db.jobPosting.count({
+          where: { organizationId: orgId, status: "open" },
+        }),
+        db.jobApplication.count({
+          where: { organizationId: orgId, stage: { in: ["applied", "screening", "interview", "offer"] } },
+        }),
+        db.interview.count({
+          where: {
+            organizationId: orgId,
+            result: "pending",
+            scheduledAt: { gte: new Date() },
+          },
+        }),
+        db.goal.findMany({
+          where: { organizationId: orgId, status: "active" },
+          select: { targetValue: true, currentValue: true },
         }),
       ])
 
@@ -112,6 +158,21 @@ export async function GET() {
       headcountByDept,
       salaryByDept,
       pendingLeaveRequests: pendingLeaveRaw,
+      modules: {
+        expenses: {
+          pendingClaims: pendingExpenseCount,
+          pendingAmount: pendingExpenseAgg._sum.totalAmount ?? 0,
+        },
+        recruitment: {
+          openJobs: openJobsRaw,
+          pipeline: pipelineRaw,
+          upcomingInterviews: upcomingInterviewsRaw,
+        },
+        performance: {
+          activeGoals: activeGoalsRaw.length,
+          avgProgress: goalAvgProgress(activeGoalsRaw),
+        },
+      },
       recentHires: recentHires.map((e) => ({
         id: e.id,
         employeeCode: e.employeeCode,

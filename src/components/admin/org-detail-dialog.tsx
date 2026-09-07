@@ -1,23 +1,12 @@
 "use client"
 
-// OrgDetailDialog — tabs (overview / features / plan / danger) + provisioning poll + impersonation
+// OrgDetailDialog shell — tabs (overview / features / plan / danger) +
+// provisioning poll + impersonation. Tab contents, info card and confirm
+// dialogs live in co-located org-detail-* files.
 import { useEffect, useRef, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import {
-  Ban,
-  CalendarDays,
-  CircleUserRound,
-  ExternalLink,
-  Globe,
-  Info,
-  Loader2,
-  LogIn,
-  PackageCheck,
-  PlayCircle,
-  Trash2,
-  Users,
-} from "lucide-react"
+import { Loader2, LogIn } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -27,44 +16,21 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { ConfirmDialog } from "@/components/shared/confirm-dialog"
 import { apiFetch } from "@/lib/fetcher"
 import { useI18n } from "@/lib/i18n"
 import { useRouter } from "next/navigation"
 import { useSessionStore } from "@/store/session"
-import { formatBdt, formatDate, formatNumber } from "@/lib/format"
-import { FEATURE_CATEGORY_LABELS, FEATURES, PLANS, PLAN_MAP } from "@/lib/features"
-import { cn } from "@/lib/utils"
+import { FEATURES } from "@/lib/features"
 import { OrgStatusBadge, PlanBadge } from "./badges"
 import { ProvisionProgress } from "./provision-progress"
-import type { FeatureCategory } from "@/lib/features"
+import { OrgDetailInfoCard } from "./org-detail-info-card"
+import { OrgDetailFeaturesTab } from "./org-detail-features-tab"
+import { OrgDetailPlanTab } from "./org-detail-plan-tab"
+import { OrgDetailDangerTab } from "./org-detail-danger-tab"
+import { OrgDetailConfirmDialogs, type OrgConfirmAction } from "./org-detail-confirm-dialogs"
 import type { OrgDetailResponse } from "./types"
-
-const CATEGORY_ORDER: FeatureCategory[] = ["hr", "finance", "operations"]
-
-function InfoRow({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: typeof Globe
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-2.5">
-      <span className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-        <Icon className="h-4 w-4 shrink-0" aria-hidden />
-        <span className="truncate">{label}</span>
-      </span>
-      <span className="min-w-0 truncate text-right text-sm font-medium">{children}</span>
-    </div>
-  )
-}
 
 export function OrgDetailDialog({
   orgId,
@@ -76,7 +42,7 @@ export function OrgDetailDialog({
   const router = useRouter()
   const { t, lang } = useI18n()
   const queryClient = useQueryClient()
-  const [confirmAction, setConfirmAction] = useState<"plan" | "suspend" | "activate" | "delete" | null>(null)
+  const [confirmAction, setConfirmAction] = useState<OrgConfirmAction>(null)
   const [pendingPlanKey, setPendingPlanKey] = useState<string | null>(null)
   const [impersonating, setImpersonating] = useState(false)
   const prevStatusRef = useRef<string | null>(null)
@@ -181,7 +147,6 @@ export function OrgDetailDialog({
   }
 
   const org = data?.org
-  const plan = org ? PLAN_MAP[org.planKey] : undefined
   const statusActive = org?.status === "active"
 
   return (
@@ -265,234 +230,51 @@ export function OrgDetailDialog({
               {/* ── Overview tab ── */}
               <TabsContent value="overview" className="mt-4 space-y-4">
                 {org.status !== "active" && <ProvisionProgress provision={data.provision} />}
-
-                <Card className="border-border/80 shadow-xs">
-                  <CardContent className="divide-y divide-border/70 p-0 sm:grid sm:grid-cols-2 sm:divide-x">
-                    <div className="px-4">
-                      <InfoRow icon={Globe} label={t("admin.orgDetail.site")}>
-                        <span className="inline-flex items-center gap-1.5 font-mono text-xs">
-                          <ExternalLink className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
-                          {org.siteName ?? `${org.subdomain}.peopleflow.com`}
-                        </span>
-                      </InfoRow>
-                      <div className="border-t border-border/70" />
-                      <InfoRow icon={Info} label={t("admin.orgDetail.subdomain")}>
-                        <span className="font-mono text-xs">{org.subdomain}</span>
-                      </InfoRow>
-                      <div className="border-t border-border/70" />
-                      <InfoRow icon={PackageCheck} label={t("admin.orgDetail.plan")}>
-                        {lang === "bn" ? plan?.nameBn : plan?.nameEn} ·{" "}
-                        <span className="tabular-nums">{formatBdt(org.mrr, lang)}</span>
-                      </InfoRow>
-                      <div className="border-t border-border/70" />
-                      <InfoRow icon={CalendarDays} label={t("admin.orgDetail.created")}>
-                        {formatDate(org.createdAt, lang)}
-                      </InfoRow>
-                    </div>
-                    <div className="border-t border-border/70 sm:border-t-0">
-                      <InfoRow icon={CircleUserRound} label={t("admin.orgDetail.adminUser")}>
-                        {data.adminUser ? (
-                          <span className="truncate" title={`${data.adminUser.name} (${data.adminUser.email})`}>
-                            {data.adminUser.name}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </InfoRow>
-                      <div className="border-t border-border/70" />
-                      <InfoRow icon={Users} label={t("admin.orgDetail.employees")}>
-                        <span className="tabular-nums">
-                          {formatNumber(data.employeesCount, lang)} {t("admin.common.people")}
-                        </span>
-                      </InfoRow>
-                      <div className="border-t border-border/70" />
-                      <InfoRow icon={PackageCheck} label={t("admin.orgDetail.setup")}>
-                        <span className={org.setupCompleted ? "text-success" : "text-warning"}>
-                          {org.setupCompleted ? t("admin.orgDetail.setupDone") : t("admin.orgDetail.setupPending")}
-                        </span>
-                      </InfoRow>
-                      <div className="border-t border-border/70" />
-                      <InfoRow icon={CalendarDays} label={t("admin.orgDetail.monthlyBill")}>
-                        <span className="tabular-nums">{formatBdt(plan?.priceBdt ?? 0, lang)}</span>
-                      </InfoRow>
-                    </div>
-                  </CardContent>
-                </Card>
+                <OrgDetailInfoCard data={data} />
               </TabsContent>
 
               {/* ── Features tab ── */}
               <TabsContent value="features" className="mt-4 space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold">{t("admin.orgDetail.featuresTitle")}</h3>
-                  <p className="text-xs text-muted-foreground">{t("admin.orgDetail.featuresDesc")}</p>
-                </div>
-                {CATEGORY_ORDER.map((category) => {
-                  const features = FEATURES.filter((f) => f.category === category)
-                  return (
-                    <Card key={category} className="border-border/80 shadow-xs">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">
-                          {lang === "bn"
-                            ? FEATURE_CATEGORY_LABELS[category].bn
-                            : FEATURE_CATEGORY_LABELS[category].en}
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="divide-y divide-border/60 py-0">
-                        {features.map((feature) => {
-                          const enabled = data.featureFlags[feature.key] ?? false
-                          const locked = feature.key === "hr_core"
-                          return (
-                            <div key={feature.key} className="flex items-center gap-3 py-3">
-                              <span
-                                className={cn(
-                                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-                                  enabled ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
-                                )}
-                              >
-                                <feature.icon className="h-4.5 w-4.5" aria-hidden />
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium">
-                                  {lang === "bn" ? feature.nameBn : feature.nameEn}
-                                  {locked && (
-                                    <span className="ml-2 rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
-                                      {t("admin.orgDetail.alwaysOn")}
-                                    </span>
-                                  )}
-                                </p>
-                                <p className="truncate text-xs text-muted-foreground">
-                                  {lang === "bn" ? feature.descBn : feature.descEn}
-                                </p>
-                              </div>
-                              <Switch
-                                checked={locked ? true : enabled}
-                                disabled={locked || patchMutation.isPending}
-                                onCheckedChange={(checked) => void toggleFeature(feature.key, checked)}
-                                aria-label={lang === "bn" ? feature.nameBn : feature.nameEn}
-                              />
-                            </div>
-                          )
-                        })}
-                      </CardContent>
-                    </Card>
-                  )
-                })}
+                <OrgDetailFeaturesTab
+                  featureFlags={data.featureFlags}
+                  onToggle={(featureKey, enabled) => void toggleFeature(featureKey, enabled)}
+                  disabled={patchMutation.isPending}
+                />
               </TabsContent>
 
               {/* ── Plan tab ── */}
               <TabsContent value="plan" className="mt-4 space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold">{t("admin.orgDetail.planTitle")}</h3>
-                  <p className="text-xs text-muted-foreground">{t("admin.orgDetail.planDesc")}</p>
-                </div>
-                <div role="radiogroup" className="grid gap-3 sm:grid-cols-3">
-                  {PLANS.map((p) => {
-                    const selected = pendingPlanKey ?? org.planKey
-                    const isCurrent = p.key === selected
-                    return (
-                      <button
-                        key={p.key}
-                        type="button"
-                        role="radio"
-                        aria-checked={isCurrent}
-                        onClick={() => setPendingPlanKey(p.key)}
-                        className={cn(
-                          "rounded-xl border p-4 text-left transition-all",
-                          isCurrent
-                            ? "border-primary bg-primary/5 shadow-xs ring-1 ring-primary/40"
-                            : "border-border/80 hover:border-primary/40 hover:shadow-xs",
-                        )}
-                      >
-                        <p className="text-sm font-semibold">{lang === "bn" ? p.nameBn : p.nameEn}</p>
-                        <p className="mt-1 text-lg font-bold tabular-nums text-primary">
-                          {formatBdt(p.priceBdt, lang)}
-                          <span className="text-xs font-normal text-muted-foreground">
-                            {t("admin.plans.perMonth")}
-                          </span>
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {p.maxEmployees === -1
-                            ? t("admin.plans.unlimited")
-                            : t("admin.plans.employeesUpTo", { max: p.maxEmployees })}
-                        </p>
-                      </button>
-                    )
-                  })}
-                </div>
-                <Button
-                  className="w-full sm:w-auto"
-                  disabled={pendingPlanKey === null || pendingPlanKey === org.planKey || patchMutation.isPending}
-                  onClick={() => setConfirmAction("plan")}
-                >
-                  {patchMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-                  {t("admin.orgDetail.applyPlan")}
-                </Button>
+                <OrgDetailPlanTab
+                  currentPlanKey={org.planKey}
+                  pendingPlanKey={pendingPlanKey}
+                  onSelect={setPendingPlanKey}
+                  onApply={() => setConfirmAction("plan")}
+                  isPending={patchMutation.isPending}
+                />
               </TabsContent>
 
               {/* ── Danger tab ── */}
               <TabsContent value="danger" className="mt-4 space-y-4">
-                <Card className="border-destructive/30 shadow-xs">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-sm text-destructive">
-                      <Ban className="h-4 w-4" aria-hidden />
-                      {statusActive ? t("admin.orgDetail.suspend") : t("admin.orgDetail.activate")}
-                    </CardTitle>
-                    <CardDescription>
-                      {statusActive
-                        ? t("admin.orgDetail.suspendConfirmDesc", { name: org.name })
-                        : t("admin.orgDetail.activateConfirmDesc", { name: org.name })}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button
-                      variant={statusActive ? "outline" : "default"}
-                      className="gap-1.5"
-                      onClick={() => setConfirmAction(statusActive ? "suspend" : "activate")}
-                      disabled={patchMutation.isPending}
-                    >
-                      {statusActive ? (
-                        <Ban className="h-4 w-4" aria-hidden />
-                      ) : (
-                        <PlayCircle className="h-4 w-4" aria-hidden />
-                      )}
-                      {statusActive ? t("admin.orgDetail.suspend") : t("admin.orgDetail.activate")}
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-destructive/50 bg-destructive/5 shadow-xs">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-sm text-destructive">
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                      {t("admin.orgDetail.delete")}
-                    </CardTitle>
-                    <CardDescription>{t("admin.orgDetail.deleteConfirmDesc", { name: org.name })}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button variant="destructive" className="gap-1.5" onClick={() => setConfirmAction("delete")} disabled={deleteMutation.isPending}>
-                      {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-                      <Trash2 className="h-4 w-4" aria-hidden />
-                      {t("admin.orgDetail.delete")}
-                    </Button>
-                  </CardContent>
-                </Card>
+                <OrgDetailDangerTab
+                  orgName={org.name}
+                  statusActive={statusActive}
+                  patchPending={patchMutation.isPending}
+                  deletePending={deleteMutation.isPending}
+                  onStatusAction={() => setConfirmAction(statusActive ? "suspend" : "activate")}
+                  onDelete={() => setConfirmAction("delete")}
+                />
               </TabsContent>
             </Tabs>
           </>
         )}
 
         {/* ── Confirm dialogs ── */}
-        <ConfirmDialog
-          open={confirmAction === "plan"}
-          onOpenChange={(next) => (next ? null : setConfirmAction(null))}
-          title={t("admin.orgDetail.applyPlanConfirmTitle")}
-          description={t("admin.orgDetail.applyPlanConfirmDesc", {
-            plan: lang === "bn" ? (PLAN_MAP[pendingPlanKey ?? ""]?.nameBn ?? "") : (PLAN_MAP[pendingPlanKey ?? ""]?.nameEn ?? ""),
-          })}
-          confirmLabel={t("admin.orgDetail.applyPlan")}
-          cancelLabel={t("common.cancel")}
-          destructive={false}
-          onConfirm={() => {
+        <OrgDetailConfirmDialogs
+          confirmAction={confirmAction}
+          onClear={() => setConfirmAction(null)}
+          orgName={org?.name ?? ""}
+          pendingPlanKey={pendingPlanKey}
+          onConfirmPlan={() => {
             if (pendingPlanKey) {
               patchMutation.mutate(
                 { planKey: pendingPlanKey },
@@ -507,15 +289,7 @@ export function OrgDetailDialog({
             }
             setConfirmAction(null)
           }}
-        />
-        <ConfirmDialog
-          open={confirmAction === "suspend"}
-          onOpenChange={(next) => (next ? null : setConfirmAction(null))}
-          title={t("admin.orgDetail.suspendConfirmTitle")}
-          description={t("admin.orgDetail.suspendConfirmDesc", { name: org?.name ?? "" })}
-          confirmLabel={t("admin.orgDetail.suspend")}
-          cancelLabel={t("common.cancel")}
-          onConfirm={() => {
+          onConfirmSuspend={() => {
             patchMutation.mutate(
               { status: "suspended" },
               {
@@ -525,16 +299,7 @@ export function OrgDetailDialog({
             )
             setConfirmAction(null)
           }}
-        />
-        <ConfirmDialog
-          open={confirmAction === "activate"}
-          onOpenChange={(next) => (next ? null : setConfirmAction(null))}
-          title={t("admin.orgDetail.activateConfirmTitle")}
-          description={t("admin.orgDetail.activateConfirmDesc", { name: org?.name ?? "" })}
-          confirmLabel={t("admin.orgDetail.activate")}
-          cancelLabel={t("common.cancel")}
-          destructive={false}
-          onConfirm={() => {
+          onConfirmActivate={() => {
             patchMutation.mutate(
               { status: "active" },
               {
@@ -544,15 +309,7 @@ export function OrgDetailDialog({
             )
             setConfirmAction(null)
           }}
-        />
-        <ConfirmDialog
-          open={confirmAction === "delete"}
-          onOpenChange={(next) => (next ? null : setConfirmAction(null))}
-          title={t("admin.orgDetail.deleteConfirmTitle")}
-          description={t("admin.orgDetail.deleteConfirmDesc", { name: org?.name ?? "" })}
-          confirmLabel={t("admin.orgDetail.delete")}
-          cancelLabel={t("common.cancel")}
-          onConfirm={() => {
+          onConfirmDelete={() => {
             setConfirmAction(null)
             deleteMutation.mutate()
           }}

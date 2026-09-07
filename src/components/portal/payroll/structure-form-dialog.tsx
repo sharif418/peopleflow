@@ -3,16 +3,15 @@
 // Create / edit salary structure — component rows builder with BD validation.
 // Form state initializes directly from `editing` (parent remounts via key when
 // the dialog opens), so no reset effects are needed.
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { useI18n } from "@/lib/i18n"
 import { apiFetch } from "@/lib/fetcher"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -21,14 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { EARNING_BADGE, DEDUCTION_BADGE } from "./labels"
+import { StructureRowsEditor } from "./structure-rows-editor"
 import type { ComponentFormRow, SalaryStructureRow } from "./types"
 
 function emptyRow(): ComponentFormRow {
@@ -113,14 +105,6 @@ export function StructureFormDialog({
     },
   })
 
-  const percentSum = useMemo(
-    () =>
-      rows
-        .filter((r) => r.type === "earning" && r.calcType === "percent")
-        .reduce((acc, r) => acc + (Number(r.value) || 0), 0),
-    [rows],
-  )
-
   const updateRow = (i: number, patch: Partial<ComponentFormRow>) => {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
   }
@@ -166,118 +150,12 @@ export function StructureFormDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">{t("portal.payroll.formComponentsTitle")}</p>
-              <Badge
-                variant="outline"
-                className={percentSum > 100 ? DEDUCTION_BADGE : EARNING_BADGE}
-              >
-                {percentSum > 100 ? "> 100%" : `${percentSum}%`}
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground">{t("portal.payroll.formComponentsDesc")}</p>
-
-            <div className="space-y-2.5">
-              {rows.map((row, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-2 items-end gap-2 rounded-lg border border-border/70 bg-muted/20 p-3 sm:grid-cols-[1fr_90px_1fr_1fr_88px_36px]"
-                >
-                  <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">
-                      {t("portal.common.name")}
-                    </Label>
-                    <Input
-                      value={row.name}
-                      maxLength={60}
-                      placeholder={t("portal.payroll.compNamePlaceholder")}
-                      onChange={(e) => updateRow(i, { name: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">
-                      {t("portal.payroll.abbrLabel")}
-                    </Label>
-                    <Input
-                      value={row.abbr}
-                      maxLength={8}
-                      placeholder={t("portal.payroll.abbrPlaceholder")}
-                      className="font-mono uppercase"
-                      onChange={(e) => updateRow(i, { abbr: e.target.value.toUpperCase() })}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">
-                      {t("portal.payroll.typeLabel")}
-                    </Label>
-                    <Select value={row.type} onValueChange={(v) => updateRow(i, { type: v })}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="earning">{t("portal.payroll.compEarning")}</SelectItem>
-                        <SelectItem value="deduction">{t("portal.payroll.compDeduction")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">
-                      {t("portal.payroll.calcLabel")}
-                    </Label>
-                    <Select
-                      value={row.calcType}
-                      onValueChange={(v) => updateRow(i, { calcType: v })}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="percent">{t("portal.payroll.calcPercent")}</SelectItem>
-                        <SelectItem value="fixed">{t("portal.payroll.calcFixed")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">
-                      {t("portal.payroll.valueLabel")}
-                      {row.calcType === "percent" ? " (%)" : " (৳)"}
-                    </Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={row.calcType === "percent" ? 100 : undefined}
-                      value={row.value}
-                      inputMode="decimal"
-                      onChange={(e) => updateRow(i, { value: e.target.value })}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-9 text-muted-foreground hover:text-destructive"
-                    aria-label={t("portal.payroll.removeComponent")}
-                    disabled={rows.length <= 1}
-                    onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
-                  >
-                    <Trash2 className="size-4" aria-hidden />
-                  </Button>
-                </div>
-              ))}
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => setRows((prev) => [...prev, emptyRow()])}
-            >
-              <Plus className="size-4" aria-hidden />
-              {t("portal.payroll.addComponent")}
-            </Button>
-          </div>
+          <StructureRowsEditor
+            rows={rows}
+            updateRow={updateRow}
+            removeRow={(i) => setRows((prev) => prev.filter((_, idx) => idx !== i))}
+            addRow={() => setRows((prev) => [...prev, emptyRow()])}
+          />
 
           {error && (
             <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive" role="alert">
